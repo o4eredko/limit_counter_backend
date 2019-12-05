@@ -1,0 +1,3 @@
+link_counter/__pycache__/
+link_counter/**/__pycache__/
+db.sqlite3
