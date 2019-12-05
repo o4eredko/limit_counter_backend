@@ -4,7 +4,9 @@ from services.views import *
 
 
 urlpatterns = [
-	path('platforms/', PlatformListCreateView.as_view()),
-	path('elements/', ElementListCreateView.as_view()),
-	path('counters/', CounterListCreateView.as_view()),
+	path('', api_root),
+	path('platforms/', PlatformListCreateView.as_view(), name='platform-list'),
+	path('elements/', ElementListCreateView.as_view(), name='element-list'),
+	path('counters/', CounterListCreateView.as_view(), name='counter-list'),
+	path('<platform>/<element>/<int:uid>/<counter>/', CounterView.as_view(), name='counter-create')
 ]
