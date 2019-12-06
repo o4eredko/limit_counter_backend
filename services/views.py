@@ -7,12 +7,8 @@ from rest_framework.reverse import reverse
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 
 from limit_counter import settings
-from services.models import Platform, Element
-from services.serializers import (
-	PlatformSerializer,
-	ElementListCreateSerializer,
-	ElementDetailSerializer,
-)
+from services.models import Platform, Element, Counter
+from services.serializers import (PlatformSerializer, ElementSerializer, CounterSerializer)
 from services import client
 
 HTTP_441_NOT_EXIST = 441
@@ -45,7 +41,7 @@ class PlatformDetailApiView(RetrieveUpdateDestroyAPIView):
 
 
 class ElementListCreateApiView(ListCreateAPIView):
-	serializer_class = ElementListCreateSerializer
+	serializer_class = ElementSerializer
 
 	def get_queryset(self):
 		platform = Platform.objects.filter(slug=self.kwargs['platform']).first()
@@ -59,7 +55,7 @@ class ElementListCreateApiView(ListCreateAPIView):
 
 
 class ElementDetailApiView(RetrieveUpdateDestroyAPIView):
-	serializer_class = ElementDetailSerializer
+	serializer_class = ElementSerializer
 	lookup_url_kwarg = 'element'
 	lookup_field = 'slug'
 
@@ -82,6 +78,31 @@ class ElementDetailApiView(RetrieveUpdateDestroyAPIView):
 		client.put(key, {'a': 1})
 		return Response(status=status.HTTP_201_CREATED)
 
-# class CounterListCreateApiView(ListCreateAPIView):
-# 	queryset = Counter.objects.all()
-# 	serializer_class = CounterListCreateSerializer
+
+class CounterListCreateApiView(ListCreateAPIView):
+	serializer_class = CounterSerializer
+
+	def get_queryset(self):
+		platform = Platform.objects.filter(slug=self.kwargs['platform']).first()
+		element = Element.objects.filter(platform=platform, slug=self.kwargs['element']).first()
+		return Counter.objects.filter(element=element)
+
+	def perform_create(self, serializer):
+		slug = slugify(serializer.validated_data['name'])
+		platform = Platform.objects.filter(slug=self.kwargs['platform']).first()
+		element = Element.objects.filter(platform=platform, slug=self.kwargs['element']).first()
+		serializer.save(element=element, slug=slug)
+
+
+class CounterDetailApiView(RetrieveUpdateDestroyAPIView):
+	serializer_class = CounterSerializer
+	lookup_url_kwarg = 'counter'
+	lookup_field = 'slug'
+
+	def get_queryset(self):
+		platform = Platform.objects.filter(slug=self.kwargs['platform']).first()
+		element = Element.objects.filter(platform=platform, slug=self.kwargs['element']).first()
+		return Counter.objects.filter(element=element)
+
+	def perform_update(self, serializer):
+		serializer.save(slug=slugify(serializer.validated_data['name']))

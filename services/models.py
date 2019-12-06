@@ -22,7 +22,7 @@ class Counter(models.Model):
 	name = models.CharField(max_length=30)
 	slug = models.SlugField(max_length=30)
 	element = models.ForeignKey(to=Element, related_name='counters', on_delete=models.CASCADE)
-	max_value = models.IntegerField()
+	max_value = models.IntegerField(verbose_name='Max value')
 
 	def __str__(self):
 		return self.name
