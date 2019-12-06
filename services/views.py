@@ -1,8 +1,10 @@
+from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
-from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView, GenericAPIView
+from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 
+from limit_counter import settings
 from services.models import Platform, Element
 from services.serializers import (
 	PlatformListCreateSerializer,
@@ -10,6 +12,10 @@ from services.serializers import (
 	ElementListCreateSerializer,
 	ElementDetailSerializer,
 )
+from services import client
+
+HTTP_441_NOT_EXIST = 441
+HTTP_442_ALREADY_EXIST = 442
 
 
 @api_view(['GET'])
@@ -50,3 +56,20 @@ class ElementDetailApiView(RetrieveUpdateDestroyAPIView):
 	serializer_class = ElementDetailSerializer
 	lookup_url_kwarg = 'element'
 	lookup_field = 'name'
+
+	def post(self, request, *args, **kwargs):
+		record_set = f"{kwargs['platform']}/{kwargs['element']}"
+		record_key = int(request.data['index'])
+		key = (settings.AEROSPIKE_NAMESPACE, record_set, record_key)
+
+		_, meta = client.exists(key)
+		if meta is not None:
+			return Response(status=HTTP_442_ALREADY_EXIST)
+
+		client.put(key, {'a': 1})
+		return Response(status=status.HTTP_201_CREATED)
+# serializer = self.get_serializer(data=request.data)
+# serializer.is_valid(raise_exception=True)
+# self.perform_create(serializer)
+# headers = self.get_success_headers(serializer.data)
+# return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
