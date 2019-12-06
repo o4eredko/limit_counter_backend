@@ -3,10 +3,38 @@ from rest_framework import serializers
 from services.models import Platform, Element
 
 
-class PlatformSerializer(serializers.HyperlinkedModelSerializer):
+class PlatformListCreateSerializer(serializers.ModelSerializer):
+	class Meta:
+		model = Platform
+		lookup_field = 'name'
+		fields = ('url', 'name')
+		extra_kwargs = {
+			'url': {'lookup_field': 'name'}
+		}
+
+	def validate(self, attrs):
+		name = attrs['name'].lower()
+		if Platform.objects.filter(name=name).exists():
+			raise serializers.ValidationError({'name': "This field must be unique in lowercase"})
+		attrs['name'] = name
+		return attrs
+
+
+class PlatformDetailSerializer(serializers.ModelSerializer):
 	class Meta:
 		model = Platform
 		fields = ('url', 'name')
+		lookup_field = 'name'
+		extra_kwargs = {
+			'url': {'lookup_field': 'name'}
+		}
+
+	def validate(self, attrs):
+		name = attrs['name'].lower()
+		if Platform.objects.filter(name=name).exists():
+			raise serializers.ValidationError({'name': "This field must be unique in lowercase"})
+		attrs['name'] = name
+		return attrs
 
 
 class ElementSerializer(serializers.HyperlinkedModelSerializer):
