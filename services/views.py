@@ -2,10 +2,15 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
 from rest_framework.viewsets import ModelViewSet
-from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
+from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView, \
+	get_object_or_404
 
 from services.models import Platform, Element
-from services.serializers import PlatformListCreateSerializer, PlatformDetailSerializer
+from services.serializers import (
+	PlatformListCreateSerializer,
+	PlatformDetailSerializer,
+	ElementListCreateSerializer
+)
 from services import client
 
 
@@ -21,28 +26,21 @@ def api_root(request, format=None):
 class PlatformListCreateApiView(ListCreateAPIView):
 	queryset = Platform.objects.all()
 	serializer_class = PlatformListCreateSerializer
-# lookup_field = 'name'
 
 
 class PlatformDetailApiView(RetrieveUpdateDestroyAPIView):
 	queryset = Platform.objects.all()
 	serializer_class = PlatformDetailSerializer
+	lookup_url_kwarg = 'platform'
 	lookup_field = 'name'
 
-# class ElementViewSet(ModelViewSet):
-# 	queryset = Element.objects.all()
-# 	serializer_class = ElementSerializer
 
-# class ElementCreateApiView(ApiView):
-# 	queryset = Element.objects.all()
-# 	serializer_class = ElementSerializer
+class ElementListCreateApiView(ListCreateAPIView):
+	queryset = Element.objects.all()
+	serializer_class = ElementListCreateSerializer
+	lookup_field = 'element'
 
-# class CounterListCreateView(ListCreateAPIView):
-# 	queryset = Counter.objects.all()
-# 	serializer_class = CounterSerializer
-#
-#
-# class CounterView(APIView):
-# 	def get(self, request, **kwargs):
-# 		print(kwargs)
-# 		return Response({'success': True})
+	def perform_create(self, serializer):
+		platform_name = self.kwargs.get('name')
+		platform = Platform.objects.get(name=platform_name)
+		serializer.save(platform=platform)

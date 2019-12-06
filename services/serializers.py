@@ -4,26 +4,45 @@ from services.models import Platform, Element
 
 
 class PlatformListCreateSerializer(serializers.ModelSerializer):
+	url = serializers.HyperlinkedIdentityField(view_name='platform-detail',
+											   lookup_url_kwarg='platform', lookup_field='name')
+
 	class Meta:
 		model = Platform
 		lookup_field = 'name'
-		fields = ('url', 'name')
-		extra_kwargs = {
-			'url': {'lookup_field': 'name'}
-		}
+		fields = ('name', 'url')
 
 	def validate(self, attrs):
-		name = attrs['name'].lower()
-		if Platform.objects.filter(name=name).exists():
+		attrs['name'] = attrs['name'].lower()
+		if self.Meta.model.objects.filter(name=attrs['name']).exists():
 			raise serializers.ValidationError({'name': "This field must be unique in lowercase"})
-		attrs['name'] = name
 		return attrs
 
 
 class PlatformDetailSerializer(serializers.ModelSerializer):
+	url = serializers.HyperlinkedIdentityField(view_name='platform-detail',
+											   lookup_url_kwarg='platform', lookup_field='name')
+
+	# elements = serializers.PrimaryKeyRelatedField(many=True)
 	class Meta:
 		model = Platform
-		fields = ('url', 'name')
+		fields = ('name', 'url')
+		lookup_field = 'platform'
+
+	def validate(self, attrs):
+		name = attrs['name'].lower()
+		if self.Meta.model.objects.filter(name=name).exists():
+			raise serializers.ValidationError({'name': "This field must be unique in lowercase"})
+		attrs['name'] = name
+		return attrs
+
+
+class ElementListCreateSerializer(serializers.ModelSerializer):
+	platform = serializers.ReadOnlyField(source='platform.name')
+
+	class Meta:
+		model = Element
+		fields = ('name', 'url', 'platform')
 		lookup_field = 'name'
 		extra_kwargs = {
 			'url': {'lookup_field': 'name'}
@@ -35,21 +54,3 @@ class PlatformDetailSerializer(serializers.ModelSerializer):
 			raise serializers.ValidationError({'name': "This field must be unique in lowercase"})
 		attrs['name'] = name
 		return attrs
-
-
-class ElementSerializer(serializers.HyperlinkedModelSerializer):
-	platform = serializers.PrimaryKeyRelatedField(queryset=Platform.objects.all())
-	platform_name = serializers.CharField(source='platform.name', read_only=True)
-
-	class Meta:
-		model = Element
-		fields = ('url', 'name', 'platform', 'platform_name')
-
-#
-# class CounterSerializer(serializers.ModelSerializer):
-# 	max_value = serializers.IntegerField(min_value=0)
-# 	element = serializers.PrimaryKeyRelatedField(queryset=Element.objects.all())
-#
-# 	class Meta:
-# 		model = Platform
-# 		fields = ('id', 'name', 'max_value', 'element')

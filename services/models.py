@@ -2,10 +2,10 @@ from django.db import models
 
 
 class Platform(models.Model):
-	name = models.CharField(max_length=20, unique=True)
+	name = models.CharField(max_length=20, unique=True, primary_key=True)
 
 	def __str__(self):
-		return self.name
+		return self.name.lower()
 
 
 class Element(models.Model):

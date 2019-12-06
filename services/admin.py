@@ -1,3 +1,6 @@
 from django.contrib import admin
 
-# Register your models here
+from services.models import Platform, Element
+
+admin.site.register(Platform)
+admin.site.register(Element)
