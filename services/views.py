@@ -1,17 +1,15 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
-from rest_framework.viewsets import ModelViewSet
-from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView, \
-	get_object_or_404
+from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView, GenericAPIView
 
 from services.models import Platform, Element
 from services.serializers import (
 	PlatformListCreateSerializer,
 	PlatformDetailSerializer,
-	ElementListCreateSerializer
+	ElementListCreateSerializer,
+	ElementDetailSerializer,
 )
-from services import client
 
 
 @api_view(['GET'])
@@ -36,11 +34,19 @@ class PlatformDetailApiView(RetrieveUpdateDestroyAPIView):
 
 
 class ElementListCreateApiView(ListCreateAPIView):
-	queryset = Element.objects.all()
 	serializer_class = ElementListCreateSerializer
-	lookup_field = 'element'
+
+	def get_queryset(self):
+		platform_name = self.kwargs['platform']
+		return Element.objects.filter(platform=Platform.objects.get(name=platform_name))
 
 	def perform_create(self, serializer):
-		platform_name = self.kwargs.get('name')
-		platform = Platform.objects.get(name=platform_name)
-		serializer.save(platform=platform)
+		platform_name = self.kwargs['platform']
+		serializer.save(platform=Platform.objects.get(name=platform_name))
+
+
+class ElementDetailApiView(RetrieveUpdateDestroyAPIView):
+	queryset = Element.objects.all()
+	serializer_class = ElementDetailSerializer
+	lookup_url_kwarg = 'element'
+	lookup_field = 'name'
