@@ -17,4 +17,7 @@ urlpatterns = [
 		 CounterListCreateApiView.as_view(), name='counter-list'),
 	path('<slug:platform>/<slug:element>/<slug:counter>/',
 		 CounterDetailApiView.as_view(), name='counter-detail'),
+
+	path('<slug:platform>/<slug:element>/<int:uid>/<slug:counter>/',
+		 CounterActionsApiView.as_view(), name='counter-actions')
 ]

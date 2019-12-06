@@ -4,7 +4,8 @@ from rest_framework.decorators import api_view
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
-from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
+from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView, GenericAPIView
+from rest_framework.views import APIView
 
 from limit_counter import settings
 from services.models import Platform, Element, Counter
@@ -88,6 +89,7 @@ class CounterListCreateApiView(ListCreateAPIView):
 		return Counter.objects.filter(element=element)
 
 	def perform_create(self, serializer):
+		"""todo Add counter to every record in Aerospike"""
 		slug = slugify(serializer.validated_data['name'])
 		platform = Platform.objects.filter(slug=self.kwargs['platform']).first()
 		element = Element.objects.filter(platform=platform, slug=self.kwargs['element']).first()
@@ -106,3 +108,13 @@ class CounterDetailApiView(RetrieveUpdateDestroyAPIView):
 
 	def perform_update(self, serializer):
 		serializer.save(slug=slugify(serializer.validated_data['name']))
+
+
+class CounterActionsApiView(APIView):
+	def get(self, request, *args, **kwargs):
+		"""todo Get Value of counter in Aerospike"""
+		return Response({'msg': 'GET REQUEST'}, status=status.HTTP_200_OK)
+
+	def post(self, request, *args, **kwargs):
+		"""todo Increment Value of counter in Aerospike"""
+		return Response({'msg': 'POST REQUEST'}, status=status.HTTP_200_OK)
