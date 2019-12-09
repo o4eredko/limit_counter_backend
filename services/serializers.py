@@ -24,6 +24,8 @@ class PlatformSerializer(serializers.HyperlinkedModelSerializer):
 
 	def validate_name(self, value):
 		slug = slugify(value)
+		if self.instance.slug == slug:
+			return value
 		if Platform.objects.filter(name=value).exists():
 			raise ValidationError("must be unique")
 		elif Platform.objects.filter(slug=slug).exists():
@@ -52,6 +54,8 @@ class ElementSerializer(serializers.ModelSerializer):
 
 	def validate_name(self, value):
 		slug = slugify(value)
+		if self.instance.slug == slug:
+			return value
 		platform_slug = self.context['view'].kwargs.get('platform')
 		platform = Platform.objects.filter(slug=platform_slug).first()
 		if Element.objects.filter(platform=platform, name=value).exists():
@@ -78,6 +82,8 @@ class CounterSerializer(serializers.ModelSerializer):
 
 	def validate_name(self, value):
 		slug = slugify(value)
+		if self.instance.slug == slug:
+			return value
 
 		platform_slug = self.context['view'].kwargs.get('platform')
 		platform = Platform.objects.filter(slug=platform_slug).first()
