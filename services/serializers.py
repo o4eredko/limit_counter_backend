@@ -24,7 +24,7 @@ class PlatformSerializer(serializers.HyperlinkedModelSerializer):
 
 	def validate_name(self, value):
 		slug = slugify(value)
-		if self.instance.slug == slug:
+		if self.instance is not None and self.instance.slug == slug:
 			return value
 		if Platform.objects.filter(name=value).exists():
 			raise ValidationError("must be unique")
@@ -54,7 +54,7 @@ class ElementSerializer(serializers.ModelSerializer):
 
 	def validate_name(self, value):
 		slug = slugify(value)
-		if self.instance.slug == slug:
+		if self.instance is not None and self.instance.slug == slug:
 			return value
 		platform_slug = self.context['view'].kwargs.get('platform')
 		platform = Platform.objects.filter(slug=platform_slug).first()
@@ -68,6 +68,7 @@ class ElementSerializer(serializers.ModelSerializer):
 class CounterSerializer(serializers.ModelSerializer):
 	slug = serializers.ReadOnlyField()
 	url = serializers.SerializerMethodField()
+	max_value = serializers.IntegerField(min_value=1)
 
 	class Meta:
 		model = Counter
@@ -82,9 +83,8 @@ class CounterSerializer(serializers.ModelSerializer):
 
 	def validate_name(self, value):
 		slug = slugify(value)
-		if self.instance.slug == slug:
+		if self.instance is not None and self.instance.slug == slug:
 			return value
-
 		platform_slug = self.context['view'].kwargs.get('platform')
 		platform = Platform.objects.filter(slug=platform_slug).first()
 		element_slug = self.context['view'].kwargs.get('element')
