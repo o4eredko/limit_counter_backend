@@ -7,7 +7,7 @@ config = {
 }
 
 try:
-	client = aerospike.client(config).connect()
+	aerospike = aerospike.client(config).connect()
 except exception.TimeoutError:
 	import sys
 

@@ -12,7 +12,7 @@ from aerospike import exception
 from limit_counter import settings
 from services.models import Platform, Element, Counter
 from services.serializers import (PlatformSerializer, ElementSerializer, CounterSerializer)
-from services import client
+from services import aerospike
 
 HTTP_440_FULL = 440
 HTTP_441_NOT_EXIST = 441
@@ -33,7 +33,7 @@ def get_add_counter_to_record(slug, max_value):
 			slug: 0,
 			f"{slug}Max": max_value
 		}
-		client.put(key, bins)
+		aerospike.put(key, bins)
 
 	return add_counter_to_record
 
@@ -42,7 +42,7 @@ def get_update_counter_max_value(slug, max_value):
 	def update_counter_max_value(record):
 		key, _, _ = record
 		bins = {f"{slug}Max": max_value}
-		client.put(key, bins)
+		aerospike.put(key, bins)
 
 	return update_counter_max_value
 
@@ -50,12 +50,12 @@ def get_update_counter_max_value(slug, max_value):
 def get_update_counter_name(old_slug, new_slug):
 	def update_counter_name(record):
 		key, _, old_bins = record
-		client.remove_bin(key, [old_slug, f"{old_slug}Max"])
+		aerospike.remove_bin(key, [old_slug, f"{old_slug}Max"])
 		bins = {
 			new_slug: old_bins[old_slug],
 			f"{new_slug}Max": old_bins[f"{old_slug}Max"],
 		}
-		client.put(key, bins)
+		aerospike.put(key, bins)
 
 	return update_counter_name
 
@@ -63,7 +63,7 @@ def get_update_counter_name(old_slug, new_slug):
 def get_delete_counter(slug):
 	def delete_counter(record):
 		key, _, _ = record
-		client.remove_bin(key, [slug, f"{slug}Max"])
+		aerospike.remove_bin(key, [slug, f"{slug}Max"])
 
 	return delete_counter
 
@@ -117,7 +117,7 @@ class ElementDetailApiView(RetrieveUpdateDestroyAPIView):
 		record_set = f"{kwargs['platform']}/{kwargs['element']}"
 		record_id = int(request.data['index'])
 		key = (settings.AEROSPIKE_NAMESPACE, record_set, record_id)
-		_, meta = client.exists(key)
+		_, meta = aerospike.exists(key)
 
 		if meta is not None:
 			return Response(status=HTTP_442_ALREADY_EXIST)
@@ -127,7 +127,7 @@ class ElementDetailApiView(RetrieveUpdateDestroyAPIView):
 		for counter in counters:
 			bins[f"{counter.slug}"] = 0
 			bins[f"{counter.slug}Max"] = counter.max_value
-		client.put(key, bins)
+		aerospike.put(key, bins)
 
 		return Response(status=status.HTTP_201_CREATED)
 
@@ -147,7 +147,7 @@ class CounterListCreateApiView(ListCreateAPIView):
 		element = Element.objects.filter(platform=platform, slug=self.kwargs['element']).first()
 
 		record_set = f"{platform.slug}/{element.slug}"
-		query = client.query(settings.AEROSPIKE_NAMESPACE, record_set)
+		query = aerospike.query(settings.AEROSPIKE_NAMESPACE, record_set)
 		query.foreach(get_add_counter_to_record(slug, serializer.validated_data['max_value']))
 
 		serializer.save(element=element, slug=slug)
@@ -169,7 +169,7 @@ class CounterDetailApiView(RetrieveUpdateDestroyAPIView):
 		name = serializer.validated_data.get('name')
 		max_value = serializer.validated_data.get('max_value')
 		set_name = f"{self.kwargs['platform']}/{self.kwargs['element']}"
-		query = client.query(settings.AEROSPIKE_NAMESPACE, set_name)
+		query = aerospike.query(settings.AEROSPIKE_NAMESPACE, set_name)
 		if name is not None and name != obj.name:
 			slug = slugify(name)
 		else:
@@ -184,7 +184,7 @@ class CounterDetailApiView(RetrieveUpdateDestroyAPIView):
 
 	def perform_destroy(self, instance):
 		set_name = f"{self.kwargs['platform']}/{self.kwargs['element']}"
-		query = client.query(settings.AEROSPIKE_NAMESPACE, set_name)
+		query = aerospike.query(settings.AEROSPIKE_NAMESPACE, set_name)
 		query.foreach(get_delete_counter(self.kwargs['counter']))
 
 
@@ -193,7 +193,7 @@ class CounterActionsApiView(APIView):
 		set_name = f"{kwargs['platform']}/{kwargs['element']}"
 		try:
 			key = (settings.AEROSPIKE_NAMESPACE, set_name, kwargs['uid'])
-			_, _, bins = client.get(key)
+			_, _, bins = aerospike.get(key)
 			result = bins.get(kwargs['counter'])
 		except (exception.AerospikeError, KeyError):
 			return Response(status=status.HTTP_400_BAD_REQUEST)
@@ -210,7 +210,7 @@ class CounterActionsApiView(APIView):
 		except ValueError:
 			return Response(status=status.HTTP_400_BAD_REQUEST)
 		try:
-			_, _, bins = client.get(key)
+			_, _, bins = aerospike.get(key)
 			if counter not in bins:
 				raise KeyError()
 		except (exception.AerospikeError, KeyError):
@@ -219,5 +219,5 @@ class CounterActionsApiView(APIView):
 		if bins[counter] + value > bins[f"{counter}Max"]:
 			return Response(status=HTTP_440_FULL)
 
-		client.increment(key, kwargs['counter'], value)
+		aerospike.increment(key, kwargs['counter'], value)
 		return Response(status=status.HTTP_200_OK)
