@@ -1,17 +1,20 @@
+import numbers
+
 from django.utils.text import slugify
 from rest_framework import status
 from rest_framework.decorators import api_view
-from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
-from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView, GenericAPIView
+from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 from rest_framework.views import APIView
+from aerospike import exception
 
 from limit_counter import settings
 from services.models import Platform, Element, Counter
 from services.serializers import (PlatformSerializer, ElementSerializer, CounterSerializer)
 from services import client
 
+HTTP_440_FULL = 440
 HTTP_441_NOT_EXIST = 441
 HTTP_442_ALREADY_EXIST = 442
 
@@ -187,9 +190,34 @@ class CounterDetailApiView(RetrieveUpdateDestroyAPIView):
 
 class CounterActionsApiView(APIView):
 	def get(self, request, *args, **kwargs):
-		"""todo Get Value of counter in Aerospike"""
-		return Response({'msg': 'GET REQUEST'}, status=status.HTTP_200_OK)
+		set_name = f"{kwargs['platform']}/{kwargs['element']}"
+		try:
+			key = (settings.AEROSPIKE_NAMESPACE, set_name, kwargs['uid'])
+			_, _, bins = client.get(key)
+			result = bins.get(kwargs['counter'])
+		except (exception.AerospikeError, KeyError):
+			return Response(status=status.HTTP_400_BAD_REQUEST)
+		else:
+			return Response(result, status=status.HTTP_200_OK)
 
 	def post(self, request, *args, **kwargs):
-		"""todo Increment Value of counter in Aerospike"""
-		return Response({'msg': 'POST REQUEST'}, status=status.HTTP_200_OK)
+		set_name = f"{kwargs['platform']}/{kwargs['element']}"
+		key = (settings.AEROSPIKE_NAMESPACE, set_name, kwargs['uid'])
+		counter = kwargs['counter']
+
+		try:
+			value = int(request.data.get('value'))
+		except ValueError:
+			return Response(status=status.HTTP_400_BAD_REQUEST)
+		try:
+			_, _, bins = client.get(key)
+			if counter not in bins:
+				raise KeyError()
+		except (exception.AerospikeError, KeyError):
+			return Response(status=HTTP_441_NOT_EXIST)
+
+		if bins[counter] + value > bins[f"{counter}Max"]:
+			return Response(status=HTTP_440_FULL)
+
+		client.increment(key, kwargs['counter'], value)
+		return Response(status=status.HTTP_200_OK)
