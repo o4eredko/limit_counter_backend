@@ -83,6 +83,19 @@ def get_update_set_name(old_name_part, new_name_part):
 	return update_set_name
 
 
+def get_delete_set(*, platform=None, element=None):
+	def delete_set(record):
+		key, _, bins = record
+		_, set_name, *_ = key
+		name_parts = set_name.split('/')
+		if platform is not None and platform in name_parts:
+			aerospike.remove(key)
+		elif element is not None and element == name_parts[1]:
+			aerospike.remove(key)
+
+	return delete_set
+
+
 class PlatformListCreateApiView(ListCreateAPIView):
 	queryset = Platform.objects.all()
 	serializer_class = PlatformSerializer
@@ -103,6 +116,11 @@ class PlatformDetailApiView(RetrieveUpdateDestroyAPIView):
 		query = aerospike.query(settings.AEROSPIKE_NAMESPACE)
 		query.foreach(get_update_set_name(obj.slug, slug))
 		serializer.save(slug=slug)
+
+	def perform_destroy(self, instance):
+		query = aerospike.query(settings.AEROSPIKE_NAMESPACE)
+		query.foreach(get_delete_set(platform=instance.slug))
+		instance.delete()
 
 
 class ElementListCreateApiView(ListCreateAPIView):
@@ -135,9 +153,17 @@ class ElementDetailApiView(RetrieveUpdateDestroyAPIView):
 		query.foreach(get_update_set_name(obj.slug, slug))
 		serializer.save(slug=slug)
 
+	def perform_destroy(self, instance):
+		query = aerospike.query(settings.AEROSPIKE_NAMESPACE)
+		query.foreach(get_delete_set(element=instance.slug))
+		instance.delete()
+
 	def post(self, request, *args, **kwargs):
 		record_set = f"{kwargs['platform']}/{kwargs['element']}"
-		record_id = int(request.data['index'])
+		try:
+			record_id = int(request.data.get('index'))
+		except TypeError:
+			return Response({'index': 'must be an Integer'}, status=status.HTTP_400_BAD_REQUEST)
 		key = (settings.AEROSPIKE_NAMESPACE, record_set, record_id)
 		_, meta = aerospike.exists(key)
 
@@ -208,6 +234,7 @@ class CounterDetailApiView(RetrieveUpdateDestroyAPIView):
 		set_name = f"{self.kwargs['platform']}/{self.kwargs['element']}"
 		query = aerospike.query(settings.AEROSPIKE_NAMESPACE, set_name)
 		query.foreach(get_delete_counter(self.kwargs['counter']))
+		instance.delete()
 
 
 class CounterActionsApiView(APIView):
