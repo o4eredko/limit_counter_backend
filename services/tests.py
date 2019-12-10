@@ -7,6 +7,7 @@ from rest_framework.reverse import reverse
 from limit_counter import settings
 from services import aerospike
 from services.models import Platform, Element, Counter
+from services.views import HTTP_441_NOT_EXIST, HTTP_440_FULL, HTTP_442_ALREADY_EXIST
 
 
 class TestPlatforms(TestCase):
@@ -14,6 +15,10 @@ class TestPlatforms(TestCase):
 	def setUpTestData(cls):
 		cls.google = Platform.objects.create(name='Google', slug='google')
 		cls.platform_list_url = reverse('platform-list')
+
+	def test_url_accessible_by_name(self):
+		response = self.client.get(self.platform_list_url)
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 	def test_create(self):
 		data = {'name': 'Platform'}
@@ -44,6 +49,10 @@ class TestElements(TestCase):
 		cls.mozilla = Platform.objects.create(name='Mozilla', slug='mozilla')
 		cls.account = Element.objects.create(name='Account', slug='account', platform=cls.google)
 		cls.google_list_url = reverse('element-list', kwargs={'platform': cls.google.slug})
+
+	def test_url_accessible_by_name(self):
+		response = self.client.get(self.google_list_url)
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 	def test_create(self):
 		data = {'name': 'Element'}
@@ -83,6 +92,10 @@ class TestCounters(TestCase):
 		cls.ads = Counter.objects.create(name='Ads', slug='ads', max_value=50, element=cls.account)
 		cls.account_list_url = reverse('counter-list', kwargs={'platform': cls.platform.slug,
 															   'element': cls.account.slug})
+
+	def test_url_accessible_by_name(self):
+		response = self.client.get(self.account_list_url)
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 	def test_create(self):
 		data = {'name': 'Counter', 'max_value': 50}
@@ -128,26 +141,73 @@ class TestCounters(TestCase):
 		response = self.client.delete(url)
 		self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
-# class TestAerospike(TestCase):
-# 	# todo tests to increment, get counter, to change max value, change counter name, number
-# 	@classmethod
-# 	def setUpTestData(cls):
-# 		cls.google = Platform.objects.create(name='Google', slug='google')
-# 		cls.account = Element.objects.create(name='Account', slug='account', platform=cls.google)
-# 		cls.groups = Counter.objects.create(name='Groups', max_value=20,
-# 											slug='groups', element=cls.account)
-# 		cls.ads = Counter.objects.create(name='Ads', max_value=20, slug='ads', element=cls.account)
+
+class TestAerospike(TestCase):
+	# todo tests to increment, get counter, number
+	@classmethod
+	def setUpTestData(cls):
+		cls.platform = Platform.objects.create(name='Test Platform', slug='test-platform')
+		cls.account = Element.objects.create(name='Account', slug='account', platform=cls.platform)
+		cls.ads = Counter.objects.create(name='Ads', max_value=20, slug='ads', element=cls.account)
+
+	def setUp(self) -> None:
+		self.added_records = []
+		url = reverse('element-detail', kwargs={'platform': self.platform.slug,
+												'element': self.account.slug})
+		data = {'index': 42}
+		response = self.client.post(url, data)
+		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+		self.added_records.append((f"{self.platform.slug}/{self.account.slug}", data['index']))
+		self.record_id = data['index']
+		self.reverse_kwargs = {
+			'platform': self.platform.slug,
+			'element': self.account.slug,
+			'uid': self.record_id,
+			'counter': self.ads.slug,
+		}
+
+	def test_create_record_error_already_exist(self):
+		url = reverse('element-detail', kwargs={'platform': self.platform.slug,
+												'element': self.account.slug})
+		data = {'index': self.record_id}
+		response = self.client.post(url, data)
+		self.assertEqual(response.status_code, HTTP_442_ALREADY_EXIST)
+
+	def test_get_counter(self):
+		response = self.client.get(reverse('counter-actions', kwargs=self.reverse_kwargs))
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.assertEqual(response.data, 0)
+
+	def test_get_counter_error_wrong_record_id(self):
+		self.reverse_kwargs['uid'] = 2147483647
+		response = self.client.get(reverse('counter-actions', kwargs=self.reverse_kwargs))
+		self.assertEqual(response.status_code, HTTP_441_NOT_EXIST)
+
+	def test_increment_counter(self):
+		data = {'value': self.ads.max_value - 1}
+		response = self.client.post(reverse('counter-actions', kwargs=self.reverse_kwargs), data)
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+	def test_increment_counter_error_wrong_value(self):
+		data = {'value': 'string'}
+		response = self.client.post(reverse('counter-actions', kwargs=self.reverse_kwargs), data)
+		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+	def test_increment_counter_error_overflow(self):
+		data = {'value': self.ads.max_value + 1}
+		response = self.client.post(reverse('counter-actions', kwargs=self.reverse_kwargs), data)
+		self.assertEqual(response.status_code, HTTP_440_FULL)
+
+	def test_get_after_increment_counter(self):
+		data = {'value': self.ads.max_value - 1}
+		response = self.client.post(reverse('counter-actions', kwargs=self.reverse_kwargs), data)
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+		response = self.client.get(reverse('counter-actions', kwargs=self.reverse_kwargs))
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.assertEqual(response.data, data['value'])
+
+	def tearDown(self) -> None:
+		for set_name, key in self.added_records:
+			aerospike.remove((settings.AEROSPIKE_NAMESPACE, set_name, key))
 #
-# 	def setUp(self) -> None:
-# 		self.added_records = []
-#
-# 	def test_create_record(self):
-# 		url = reverse('element-detail', kwargs={'platform': self.google.slug,
-# 												'element': self.ads.slug})
-# 		response = self.client.post(url, {'index': 1})
-# 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-# 		self.added_records.append((f"{self.google.slug}/{self.ads.slug}", 1))
-#
-# 	def tearDown(self) -> None:
-# 		for set_name, key in self.added_records:
-# 			aerospike.remove((settings.AEROSPIKE_NAMESPACE, set_name, key))

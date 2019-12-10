@@ -1,5 +1,6 @@
 from services import aerospike
 
+# todo possible to move these function to Class with __call__ method
 
 def update_set_name(old_name_part, new_name_part):
 	def wrapper(record):
