@@ -1,5 +1,3 @@
-import numbers
-
 from django.utils.text import slugify
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -68,6 +66,23 @@ def get_delete_counter(slug):
 	return delete_counter
 
 
+def get_update_set_name(old_name_part, new_name_part):
+	def update_set_name(record):
+		key, _, bins = record
+		namespace, set_name, *_ = key
+		name_parts = set_name.split('/')
+		try:
+			index = name_parts.index(old_name_part)
+		except ValueError:
+			return
+		else:
+			name_parts[index] = new_name_part
+			aerospike.put((namespace, '/'.join(name_parts), bins['key']), bins)
+			aerospike.remove(key)
+
+	return update_set_name
+
+
 class PlatformListCreateApiView(ListCreateAPIView):
 	queryset = Platform.objects.all()
 	serializer_class = PlatformSerializer
@@ -77,14 +92,17 @@ class PlatformListCreateApiView(ListCreateAPIView):
 
 
 class PlatformDetailApiView(RetrieveUpdateDestroyAPIView):
-	# todo if i change platform, i have to change set name in aerospike
 	queryset = Platform.objects.all()
 	serializer_class = PlatformSerializer
 	lookup_url_kwarg = 'platform'
 	lookup_field = 'slug'
 
 	def perform_update(self, serializer):
-		serializer.save(slug=slugify(serializer.validated_data['name']))
+		obj = self.get_object()
+		slug = slugify(serializer.validated_data['name'])
+		query = aerospike.query(settings.AEROSPIKE_NAMESPACE)
+		query.foreach(get_update_set_name(obj.slug, slug))
+		serializer.save(slug=slug)
 
 
 class ElementListCreateApiView(ListCreateAPIView):
@@ -111,7 +129,11 @@ class ElementDetailApiView(RetrieveUpdateDestroyAPIView):
 		return Element.objects.filter(platform=platform)
 
 	def perform_update(self, serializer):
-		serializer.save(slug=slugify(serializer.validated_data['name']))
+		obj = self.get_object()
+		slug = slugify(serializer.validated_data['name'])
+		query = aerospike.query(settings.AEROSPIKE_NAMESPACE)
+		query.foreach(get_update_set_name(obj.slug, slug))
+		serializer.save(slug=slug)
 
 	def post(self, request, *args, **kwargs):
 		record_set = f"{kwargs['platform']}/{kwargs['element']}"

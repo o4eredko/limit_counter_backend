@@ -1,8 +1,6 @@
-from django.urls import path, include
+from django.urls import path
 
 from services.views import *
-
-# router.register('elements', ElementViewSet)
 
 urlpatterns = [
 	path('', api_root),

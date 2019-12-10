@@ -115,26 +115,26 @@ class TestCounters(TestCase):
 		self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
 
-class TestAerospike(TestCase):
-	# todo tests to increment, get counter, to change max value, change counter name, number
-	@classmethod
-	def setUpTestData(cls):
-		cls.google = Platform.objects.create(name='Google', slug='google')
-		cls.account = Element.objects.create(name='Account', slug='account', platform=cls.google)
-		cls.groups = Counter.objects.create(name='Groups', max_value=20,
-											slug='groups', element=cls.account)
-		cls.ads = Counter.objects.create(name='Ads', max_value=20, slug='ads', element=cls.account)
-
-	def setUp(self) -> None:
-		self.added_records = []
-
-	def test_create_record(self):
-		url = reverse('element-detail', kwargs={'platform': self.google.slug,
-												'element': self.ads.slug})
-		response = self.client.post(url, {'index': 1})
-		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-		self.added_records.append((f"{self.google.slug}/{self.ads.slug}", 1))
-
-	def tearDown(self) -> None:
-		for set_name, key in self.added_records:
-			aerospike.remove((settings.AEROSPIKE_NAMESPACE, set_name, key))
+# class TestAerospike(TestCase):
+# 	# todo tests to increment, get counter, to change max value, change counter name, number
+# 	@classmethod
+# 	def setUpTestData(cls):
+# 		cls.google = Platform.objects.create(name='Google', slug='google')
+# 		cls.account = Element.objects.create(name='Account', slug='account', platform=cls.google)
+# 		cls.groups = Counter.objects.create(name='Groups', max_value=20,
+# 											slug='groups', element=cls.account)
+# 		cls.ads = Counter.objects.create(name='Ads', max_value=20, slug='ads', element=cls.account)
+#
+# 	def setUp(self) -> None:
+# 		self.added_records = []
+#
+# 	def test_create_record(self):
+# 		url = reverse('element-detail', kwargs={'platform': self.google.slug,
+# 												'element': self.ads.slug})
+# 		response = self.client.post(url, {'index': 1})
+# 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+# 		self.added_records.append((f"{self.google.slug}/{self.ads.slug}", 1))
+#
+# 	def tearDown(self) -> None:
+# 		for set_name, key in self.added_records:
+# 			aerospike.remove((settings.AEROSPIKE_NAMESPACE, set_name, key))
