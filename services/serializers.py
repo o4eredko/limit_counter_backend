@@ -57,17 +57,18 @@ class ElementSerializer(serializers.ModelSerializer):
 		if self.instance is not None and self.instance.slug == slug:
 			return value
 		platform_slug = self.context['view'].kwargs.get('platform')
-		platform = Platform.objects.filter(slug=platform_slug).first()
-		if Element.objects.filter(platform=platform, name=value).exists():
+
+		if Element.objects.filter(platform__slug=platform_slug, name=value).exists():
 			raise ValidationError("must be unique inside each platform")
-		elif Element.objects.filter(platform=platform, slug=slug).exists():
+		elif Element.objects.filter(platform__slug=platform_slug, slug=slug).exists():
 			raise ValidationError("avoid similar names i.e (Google google, face-book Face Book)")
 		return value
 
 
 class CounterSerializer(serializers.ModelSerializer):
-	slug = serializers.ReadOnlyField()
+	# todo to change max_value, check that records don't overflow new value
 	url = serializers.SerializerMethodField()
+	slug = serializers.ReadOnlyField()
 	max_value = serializers.IntegerField(min_value=1)
 
 	class Meta:
@@ -85,10 +86,9 @@ class CounterSerializer(serializers.ModelSerializer):
 		slug = slugify(value)
 		if self.instance is not None and self.instance.slug == slug:
 			return value
-		platform_slug = self.context['view'].kwargs.get('platform')
-		platform = Platform.objects.filter(slug=platform_slug).first()
 		element_slug = self.context['view'].kwargs.get('element')
-		element = Element.objects.filter(platform=platform, slug=element_slug).first()
+		platform_slug = self.context['view'].kwargs.get('platform')
+		element = Element.objects.filter(platform__slug=platform_slug, slug=element_slug).first()
 
 		if Counter.objects.filter(element=element, name=value).exists():
 			raise ValidationError("must be unique inside each element")

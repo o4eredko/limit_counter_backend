@@ -24,16 +24,17 @@ def api_root(request, format=None):
 	})
 
 
-def get_add_counter_to_record(slug, max_value):
-	def add_counter_to_record(record):
-		key, _, _ = record
-		bins = {
-			slug: 0,
-			f"{slug}Max": max_value
-		}
-		aerospike.put(key, bins)
+#
+# def delete_record(record):
+# 	key, _, _ = record
+# 	aerospike.remove(key)
 
-	return add_counter_to_record
+def add_counter_to_record(counter_id):
+	def wrapper(record):
+		key, _, _ = record
+		aerospike.put(key, {counter_id: 0})
+
+	return wrapper
 
 
 def get_update_counter_max_value(slug, max_value):
@@ -58,16 +59,16 @@ def get_update_counter_name(old_slug, new_slug):
 	return update_counter_name
 
 
-def get_delete_counter(slug):
-	def delete_counter(record):
+def delete_counter(counter_id):
+	def wrapper(record):
 		key, _, _ = record
-		aerospike.remove_bin(key, [slug, f"{slug}Max"])
+		aerospike.remove_bin(key, [counter_id])
 
-	return delete_counter
+	return wrapper
 
 
-def get_update_set_name(old_name_part, new_name_part):
-	def update_set_name(record):
+def update_set_name(old_name_part, new_name_part):
+	def wrapper(record):
 		key, _, bins = record
 		namespace, set_name, *_ = key
 		name_parts = set_name.split('/')
@@ -80,11 +81,11 @@ def get_update_set_name(old_name_part, new_name_part):
 			aerospike.put((namespace, '/'.join(name_parts), bins['key']), bins)
 			aerospike.remove(key)
 
-	return update_set_name
+	return wrapper
 
 
-def get_delete_set(*, platform=None, element=None):
-	def delete_set(record):
+def delete_set(*, platform=None, element=None):
+	def wrapper(record):
 		key, _, bins = record
 		_, set_name, *_ = key
 		name_parts = set_name.split('/')
@@ -93,7 +94,7 @@ def get_delete_set(*, platform=None, element=None):
 		elif element is not None and element == name_parts[1]:
 			aerospike.remove(key)
 
-	return delete_set
+	return wrapper
 
 
 class PlatformListCreateApiView(ListCreateAPIView):
@@ -114,12 +115,14 @@ class PlatformDetailApiView(RetrieveUpdateDestroyAPIView):
 		obj = self.get_object()
 		slug = slugify(serializer.validated_data['name'])
 		query = aerospike.query(settings.AEROSPIKE_NAMESPACE)
-		query.foreach(get_update_set_name(obj.slug, slug))
+		callback_func = update_set_name(obj.slug, slug)
+		query.foreach(callback_func)
 		serializer.save(slug=slug)
 
 	def perform_destroy(self, instance):
 		query = aerospike.query(settings.AEROSPIKE_NAMESPACE)
-		query.foreach(get_delete_set(platform=instance.slug))
+		callback_func = delete_set(platform=instance.slug)
+		query.foreach(callback_func)
 		instance.delete()
 
 
@@ -127,14 +130,13 @@ class ElementListCreateApiView(ListCreateAPIView):
 	serializer_class = ElementSerializer
 
 	def get_queryset(self):
-		platform = Platform.objects.filter(slug=self.kwargs['platform']).first()
-		return Element.objects.filter(platform=platform)
+		return Element.objects.filter(platform__slug=self.kwargs['platform'])
 
 	def perform_create(self, serializer):
-		name = serializer.validated_data['name']
 		platform_slug = self.kwargs['platform']
+		slug = slugify(serializer.validated_data['name'])
 		platform = Platform.objects.filter(slug=platform_slug).first()
-		serializer.save(platform=platform, slug=slugify(name))
+		serializer.save(platform=platform, slug=slug)
 
 
 class ElementDetailApiView(RetrieveUpdateDestroyAPIView):
@@ -143,40 +145,41 @@ class ElementDetailApiView(RetrieveUpdateDestroyAPIView):
 	lookup_field = 'slug'
 
 	def get_queryset(self):
-		platform = Platform.objects.filter(slug=self.kwargs['platform']).first()
-		return Element.objects.filter(platform=platform)
+		return Element.objects.filter(platform__slug=self.kwargs['platform'])
 
 	def perform_update(self, serializer):
 		obj = self.get_object()
 		slug = slugify(serializer.validated_data['name'])
 		query = aerospike.query(settings.AEROSPIKE_NAMESPACE)
-		query.foreach(get_update_set_name(obj.slug, slug))
+		callback_func = update_set_name(obj.slug, slug)
+		query.foreach(callback_func)
 		serializer.save(slug=slug)
 
 	def perform_destroy(self, instance):
 		query = aerospike.query(settings.AEROSPIKE_NAMESPACE)
-		query.foreach(get_delete_set(element=instance.slug))
+		callback_func = delete_set(element=instance.slug)
+		query.foreach(callback_func)
 		instance.delete()
 
 	def post(self, request, *args, **kwargs):
-		record_set = f"{kwargs['platform']}/{kwargs['element']}"
 		try:
-			record_id = int(request.data.get('index'))
-		except TypeError:
+			record_id = int(request.data['index'])
+		except (KeyError, ValueError):
 			return Response({'index': 'must be an Integer'}, status=status.HTTP_400_BAD_REQUEST)
-		key = (settings.AEROSPIKE_NAMESPACE, record_set, record_id)
-		_, meta = aerospike.exists(key)
 
+		element_slug = kwargs['element']
+		platform_slug = kwargs['platform']
+		key = (settings.AEROSPIKE_NAMESPACE, f"{platform_slug}/{element_slug}", record_id)
+		_, meta = aerospike.exists(key)
 		if meta is not None:
 			return Response(status=HTTP_442_ALREADY_EXIST)
-		element = Element.objects.filter(slug=kwargs['element']).first()
+
+		element = Element.objects.filter(platform__slug=platform_slug, slug=element_slug).first()
 		counters = Counter.objects.filter(element=element)
 		bins = {'key': record_id}
 		for counter in counters:
-			bins[f"{counter.slug}"] = 0
-			bins[f"{counter.slug}Max"] = counter.max_value
+			bins[str(counter.id)] = 0
 		aerospike.put(key, bins)
-
 		return Response(status=status.HTTP_201_CREATED)
 
 
@@ -184,21 +187,19 @@ class CounterListCreateApiView(ListCreateAPIView):
 	serializer_class = CounterSerializer
 
 	def get_queryset(self):
-		platform = Platform.objects.filter(slug=self.kwargs['platform']).first()
-		element = Element.objects.filter(platform=platform, slug=self.kwargs['element']).first()
-		return Counter.objects.filter(element=element)
+		return Counter.objects.filter(element__platform__slug=self.kwargs['platform'],
+									  element__slug=self.kwargs['element'])
 
 	def perform_create(self, serializer):
-		"""todo validation for bin name less than 14 characters"""
 		slug = slugify(serializer.validated_data['name'])
-		platform = Platform.objects.filter(slug=self.kwargs['platform']).first()
-		element = Element.objects.filter(platform=platform, slug=self.kwargs['element']).first()
-
-		record_set = f"{platform.slug}/{element.slug}"
-		query = aerospike.query(settings.AEROSPIKE_NAMESPACE, record_set)
-		query.foreach(get_add_counter_to_record(slug, serializer.validated_data['max_value']))
-
+		element_slug = self.kwargs['element']
+		platform_slug = self.kwargs['platform']
+		element = Element.objects.filter(platform__slug=platform_slug, slug=element_slug).first()
 		serializer.save(element=element, slug=slug)
+
+		query = aerospike.query(settings.AEROSPIKE_NAMESPACE, f"{platform_slug}/{element_slug}")
+		callback_func = add_counter_to_record(serializer.data['id'])
+		query.foreach(callback_func)
 
 
 class CounterDetailApiView(RetrieveUpdateDestroyAPIView):
@@ -207,66 +208,52 @@ class CounterDetailApiView(RetrieveUpdateDestroyAPIView):
 	lookup_field = 'slug'
 
 	def get_queryset(self):
-		platform = Platform.objects.filter(slug=self.kwargs['platform']).first()
-		element = Element.objects.filter(platform=platform, slug=self.kwargs['element']).first()
-		return Counter.objects.filter(element=element)
+		return Counter.objects.filter(element__platform__slug=self.kwargs['platform'],
+									  element__slug=self.kwargs['element'])
 
 	def perform_update(self, serializer):
-		"""todo validation for bin name less than 14 characters"""
-		obj = self.get_object()
-		name = serializer.validated_data.get('name')
-		max_value = serializer.validated_data.get('max_value')
-		set_name = f"{self.kwargs['platform']}/{self.kwargs['element']}"
-		query = aerospike.query(settings.AEROSPIKE_NAMESPACE, set_name)
-		if name is not None and name != obj.name:
-			slug = slugify(name)
-		else:
-			slug = obj.slug
-
-		if max_value is not None and max_value != obj.max_value:
-			query.foreach(get_update_counter_max_value(obj.slug, max_value))
-		if slug != obj.slug:
-			query.foreach(get_update_counter_name(obj.slug, slug))
-
+		slug = slugify(serializer.validated_data['name'])
 		serializer.save(slug=slug)
 
 	def perform_destroy(self, instance):
 		set_name = f"{self.kwargs['platform']}/{self.kwargs['element']}"
 		query = aerospike.query(settings.AEROSPIKE_NAMESPACE, set_name)
-		query.foreach(get_delete_counter(self.kwargs['counter']))
+		callback_func = delete_counter(instance.id)
+		query.foreach(callback_func)
 		instance.delete()
 
 
 class CounterActionsApiView(APIView):
 	def get(self, request, *args, **kwargs):
-		set_name = f"{kwargs['platform']}/{kwargs['element']}"
+		element_slug = kwargs['element']
+		platform_slug = kwargs['platform']
+		key = (settings.AEROSPIKE_NAMESPACE, f"{platform_slug}/{element_slug}", kwargs['uid'])
+		counter = Counter.objects.filter(element__platform__slug=platform_slug,
+										 element__slug=element_slug, slug=kwargs['counter']).first()
 		try:
-			key = (settings.AEROSPIKE_NAMESPACE, set_name, kwargs['uid'])
 			_, _, bins = aerospike.get(key)
-			result = bins.get(kwargs['counter'])
-		except (exception.AerospikeError, KeyError):
-			return Response(status=status.HTTP_400_BAD_REQUEST)
-		else:
-			return Response(result, status=status.HTTP_200_OK)
+			result = bins[str(counter.id)]
+		except (exception.AerospikeError, AttributeError):
+			return Response(status=HTTP_441_NOT_EXIST)
+		return Response(result, status=status.HTTP_200_OK)
 
 	def post(self, request, *args, **kwargs):
-		set_name = f"{kwargs['platform']}/{kwargs['element']}"
-		key = (settings.AEROSPIKE_NAMESPACE, set_name, kwargs['uid'])
-		counter = kwargs['counter']
-
 		try:
-			value = int(request.data.get('value'))
-		except ValueError:
-			return Response(status=status.HTTP_400_BAD_REQUEST)
+			value = int(request.data['value'])
+		except (KeyError, ValueError):
+			return Response({'value': 'must be an Integer'}, status=status.HTTP_400_BAD_REQUEST)
+
+		element_slug = kwargs['element']
+		platform_slug = kwargs['platform']
+		key = (settings.AEROSPIKE_NAMESPACE, f"{platform_slug}/{element_slug}", kwargs['uid'])
+		counter = Counter.objects.filter(element__slug=element_slug, slug=kwargs['counter']).first()
 		try:
 			_, _, bins = aerospike.get(key)
-			if counter not in bins:
-				raise KeyError()
+			counter_value = bins[str(counter.id)]
 		except (exception.AerospikeError, KeyError):
 			return Response(status=HTTP_441_NOT_EXIST)
 
-		if bins[counter] + value > bins[f"{counter}Max"]:
+		if counter_value + value > counter.max_value:
 			return Response(status=HTTP_440_FULL)
-
-		aerospike.increment(key, kwargs['counter'], value)
+		aerospike.increment(key, str(counter.id), value)
 		return Response(status=status.HTTP_200_OK)
