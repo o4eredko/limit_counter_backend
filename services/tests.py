@@ -13,7 +13,7 @@ from services.views import HTTP_441_NOT_EXIST, HTTP_440_FULL, HTTP_442_ALREADY_E
 class TestPlatforms(TestCase):
 	@classmethod
 	def setUpTestData(cls):
-		cls.google = Platform.objects.create(name='Google', slug='google')
+		cls.platform = Platform.objects.create(name='Test Platform', slug='test-platform')
 		cls.platform_list_url = reverse('platform-list')
 
 	def test_url_accessible_by_name(self):
@@ -26,18 +26,26 @@ class TestPlatforms(TestCase):
 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
 	def test_create_error_name_exists(self):
-		data = {'name': self.google.name}
+		data = {'name': self.platform.name}
 		response = self.client.post(self.platform_list_url, data)
 		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 	def test_create_error_slug_exists(self):
-		data = {'name': self.google.slug}
+		data = {'name': self.platform.slug}
 		response = self.client.post(self.platform_list_url, data)
 		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+	def test_update(self):
+		platform = Platform.objects.create(name='Platform For Update', slug='platform-to-update')
+		url = reverse('platform-detail', kwargs={'platform': platform.slug})
+		data = {'name': 'Platform Was Updated'}
+		response = self.client.patch(url, json.dumps(data), content_type='application/json')
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.assertEqual(response.data['name'], data['name'])
+
 	def test_delete(self):
-		yahoo = Platform.objects.create(name='Yahoo', slug='yahoo')
-		url = reverse('platform-detail', kwargs={'platform': yahoo.slug})
+		platform = Platform.objects.create(name='Platform To Delete', slug='platform-to-delete')
+		url = reverse('platform-detail', kwargs={'platform': platform.slug})
 		response = self.client.delete(url)
 		self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
@@ -45,41 +53,51 @@ class TestPlatforms(TestCase):
 class TestElements(TestCase):
 	@classmethod
 	def setUpTestData(cls):
-		cls.google = Platform.objects.create(name='Google', slug='google')
-		cls.mozilla = Platform.objects.create(name='Mozilla', slug='mozilla')
-		cls.account = Element.objects.create(name='Account', slug='account', platform=cls.google)
-		cls.google_list_url = reverse('element-list', kwargs={'platform': cls.google.slug})
+		cls.platform = Platform.objects.create(name='Test Platform', slug='test-platform')
+		cls.platform2 = Platform.objects.create(name='Test Platform2', slug='test-platform2')
+		cls.element = Element.objects.create(name='Account', slug='account', platform=cls.platform)
+		cls.element_list_url = reverse('element-list', kwargs={'platform': cls.platform.slug})
 
 	def test_url_accessible_by_name(self):
-		response = self.client.get(self.google_list_url)
+		response = self.client.get(self.element_list_url)
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 	def test_create(self):
 		data = {'name': 'Element'}
-		response = self.client.post(self.google_list_url, data)
+		response = self.client.post(self.element_list_url, data)
 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
 	def test_create_name_exist_in_another_platform(self):
-		data = {'name': self.account.name}
-		url = reverse('element-list', kwargs={'platform': self.mozilla.slug})
+		data = {'name': self.element.name}
+		url = reverse('element-list', kwargs={'platform': self.platform2.slug})
 		response = self.client.post(url, data)
 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
 	def test_create_error_name_exists(self):
-		data = {'name': self.account.name}
-		response = self.client.post(self.google_list_url, data)
+		data = {'name': self.element.name}
+		response = self.client.post(self.element_list_url, data)
 		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 	def test_create_platform_error_slug_exists(self):
-		data = {'name': self.account.slug}
-		response = self.client.post(self.google_list_url, data)
+		data = {'name': self.element.slug}
+		response = self.client.post(self.element_list_url, data)
 		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+	def test_update(self):
+		element = Element.objects.create(name='Element To Update', slug='element-to-update',
+										 platform=self.platform)
+		reverse_kwargs = {'platform': self.platform.slug, 'element': element.slug}
+		url = reverse('element-detail', kwargs=reverse_kwargs)
+		data = {'name': 'Element Was Updated'}
+		response = self.client.patch(url, json.dumps(data), content_type='application/json')
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.assertEqual(response.data['name'], data['name'])
+
 	def test_delete(self):
-		ad_groups = Element.objects.create(name='Ad Groups', slug='ad-groups', platform=self.google)
-		url = reverse('element-detail', kwargs={'platform': self.google.slug,
-												'element': ad_groups.slug})
-		response = self.client.delete(url)
+		element = Element.objects.create(name='Test Element', slug='test-element',
+										 platform=self.platform)
+		reverse_kwargs = {'platform': self.platform.slug, 'element': element.slug}
+		response = self.client.delete(reverse('element-detail', kwargs=reverse_kwargs))
 		self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
 
@@ -87,43 +105,46 @@ class TestCounters(TestCase):
 	@classmethod
 	def setUpTestData(cls):
 		cls.platform = Platform.objects.create(name='Test Platform', slug='test-platform')
-		cls.account = Element.objects.create(name='Account', slug='account', platform=cls.platform)
-		cls.group = Element.objects.create(name='Group', slug='group', platform=cls.platform)
-		cls.ads = Counter.objects.create(name='Ads', slug='ads', max_value=50, element=cls.account)
-		cls.account_list_url = reverse('counter-list', kwargs={'platform': cls.platform.slug,
-															   'element': cls.account.slug})
+		cls.element = Element.objects.create(name='Test Element', slug='test-element',
+											 platform=cls.platform)
+		cls.element2 = Element.objects.create(name='Test Element2', slug='test-element2',
+											  platform=cls.platform)
+		cls.counter = Counter.objects.create(name='Test Counter', slug='test-counter', max_value=50,
+											 element=cls.element)
+		reverse_kwargs = {'platform': cls.platform.slug, 'element': cls.element.slug}
+		cls.counter_list_url = reverse('counter-list', kwargs=reverse_kwargs)
 
 	def test_url_accessible_by_name(self):
-		response = self.client.get(self.account_list_url)
+		response = self.client.get(self.counter_list_url)
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 	def test_create(self):
 		data = {'name': 'Counter', 'max_value': 50}
-		response = self.client.post(self.account_list_url, data)
+		response = self.client.post(self.counter_list_url, data)
 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
 	def test_create_name_exists_in_another_element(self):
-		data = {'name': self.ads.name, 'max_value': 50}
-		url = reverse('counter-list', kwargs={'platform': self.platform.slug,
-											  'element': self.group.slug})
+		data = {'name': self.counter.name, 'max_value': 50}
+		reverse_kwargs = {'platform': self.platform.slug, 'element': self.element2.slug}
+		url = reverse('counter-list', kwargs=reverse_kwargs)
 		response = self.client.post(url, data)
 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
 	def test_create_error_name_exists(self):
-		data = {'name': self.ads.name, 'max_value': 50}
-		response = self.client.post(self.account_list_url, data)
+		data = {'name': self.counter.name, 'max_value': 50}
+		response = self.client.post(self.counter_list_url, data)
 		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 	def test_create_error_invalid_max_value(self):
-		data = {'name': 'Counter', 'max_value': 0}
-		response = self.client.post(self.account_list_url, data)
+		data = {'name': 'Counter With Invalid Max Value', 'max_value': 0}
+		response = self.client.post(self.counter_list_url, data)
 		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 	def test_update_name(self):
 		counter = Counter.objects.create(name='Counter', slug='counter',
-										 max_value=50, element=self.account)
+										 max_value=50, element=self.element)
 		reverse_kwargs = {
-			'platform': self.platform.slug, 'element': self.account.slug, 'counter': counter.slug
+			'platform': self.platform.slug, 'element': self.element.slug, 'counter': counter.slug
 		}
 		data = {'name': 'Changed Name'}
 		url = reverse('counter-detail', kwargs=reverse_kwargs)
@@ -133,9 +154,9 @@ class TestCounters(TestCase):
 
 	def test_delete(self):
 		counter = Counter.objects.create(name='Counter', slug='counter',
-										 max_value=5, element=self.account)
+										 max_value=5, element=self.element)
 		reverse_kwargs = {
-			'platform': self.platform.slug, 'element': self.account.slug, 'counter': counter.slug
+			'platform': self.platform.slug, 'element': self.element.slug, 'counter': counter.slug
 		}
 		url = reverse('counter-detail', kwargs=reverse_kwargs)
 		response = self.client.delete(url)
@@ -143,32 +164,33 @@ class TestCounters(TestCase):
 
 
 class TestAerospike(TestCase):
-	# todo tests to increment, get counter, number
 	@classmethod
 	def setUpTestData(cls):
 		cls.platform = Platform.objects.create(name='Test Platform', slug='test-platform')
-		cls.account = Element.objects.create(name='Account', slug='account', platform=cls.platform)
-		cls.ads = Counter.objects.create(name='Ads', max_value=20, slug='ads', element=cls.account)
+		cls.element = Element.objects.create(name='Test Element', slug='test-element',
+											 platform=cls.platform)
+		cls.counter = Counter.objects.create(name='Test Counter', slug='test-counter', max_value=20,
+											 element=cls.element)
 
 	def setUp(self) -> None:
 		self.added_records = []
 		url = reverse('element-detail', kwargs={'platform': self.platform.slug,
-												'element': self.account.slug})
+												'element': self.element.slug})
 		data = {'index': 42}
 		response = self.client.post(url, data)
 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-		self.added_records.append((f"{self.platform.slug}/{self.account.slug}", data['index']))
+		self.added_records.append((f"{self.platform.slug}/{self.element.slug}", data['index']))
 		self.record_id = data['index']
 		self.reverse_kwargs = {
 			'platform': self.platform.slug,
-			'element': self.account.slug,
+			'element': self.element.slug,
 			'uid': self.record_id,
-			'counter': self.ads.slug,
+			'counter': self.counter.slug,
 		}
 
 	def test_create_record_error_already_exist(self):
 		url = reverse('element-detail', kwargs={'platform': self.platform.slug,
-												'element': self.account.slug})
+												'element': self.element.slug})
 		data = {'index': self.record_id}
 		response = self.client.post(url, data)
 		self.assertEqual(response.status_code, HTTP_442_ALREADY_EXIST)
@@ -184,7 +206,7 @@ class TestAerospike(TestCase):
 		self.assertEqual(response.status_code, HTTP_441_NOT_EXIST)
 
 	def test_increment_counter(self):
-		data = {'value': self.ads.max_value - 1}
+		data = {'value': self.counter.max_value - 1}
 		response = self.client.post(reverse('counter-actions', kwargs=self.reverse_kwargs), data)
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -194,18 +216,20 @@ class TestAerospike(TestCase):
 		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 	def test_increment_counter_error_overflow(self):
-		data = {'value': self.ads.max_value + 1}
+		data = {'value': self.counter.max_value + 1}
 		response = self.client.post(reverse('counter-actions', kwargs=self.reverse_kwargs), data)
 		self.assertEqual(response.status_code, HTTP_440_FULL)
 
 	def test_get_after_increment_counter(self):
-		data = {'value': self.ads.max_value - 1}
+		data = {'value': self.counter.max_value - 1}
 		response = self.client.post(reverse('counter-actions', kwargs=self.reverse_kwargs), data)
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 		response = self.client.get(reverse('counter-actions', kwargs=self.reverse_kwargs))
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 		self.assertEqual(response.data, data['value'])
+
+	# def test_change_set_name(self):
 
 	def tearDown(self) -> None:
 		for set_name, key in self.added_records:
