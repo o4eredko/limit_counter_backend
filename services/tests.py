@@ -3,6 +3,7 @@ import json
 from django.test import TestCase
 from rest_framework import status
 from rest_framework.reverse import reverse
+from aerospike import exception
 
 from limit_counter import settings
 from services import aerospike
@@ -229,9 +230,32 @@ class TestAerospike(TestCase):
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 		self.assertEqual(response.data, data['value'])
 
-	# def test_change_set_name(self):
+	def test_change_set_name(self):
+		platform = Platform.objects.create(name='Platform To Update', slug='platform-to-update')
+		element = Element.objects.create(name='Test Element', slug='test-element',
+										 platform=platform)
+
+		url = reverse('element-detail', kwargs={'platform': platform.slug, 'element': element.slug})
+		response = self.client.post(url, {'index': 1})
+		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+		old_set_name = f"{platform.slug}/{element.slug}"
+		self.added_records.append((old_set_name, 1))
+
+		data = {'name': 'Platform Was Updated'}
+		url = reverse('platform-detail', kwargs={'platform': platform.slug})
+		response = self.client.patch(url, json.dumps(data), content_type='application/json')
+		new_set_name = f"{response.data['slug']}/{element.slug}"
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.added_records.append((new_set_name, 1))
+
+		_, meta = aerospike.exists((settings.AEROSPIKE_NAMESPACE, old_set_name, 1))
+		self.assertIsNone(meta)
+		_, meta = aerospike.exists((settings.AEROSPIKE_NAMESPACE, new_set_name, 1))
+		self.assertIsNotNone(meta)
 
 	def tearDown(self) -> None:
 		for set_name, key in self.added_records:
-			aerospike.remove((settings.AEROSPIKE_NAMESPACE, set_name, key))
-#
+			try:
+				aerospike.remove((settings.AEROSPIKE_NAMESPACE, set_name, key))
+			except exception.AerospikeError:
+				pass
