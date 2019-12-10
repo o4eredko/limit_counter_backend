@@ -8,9 +8,10 @@ from rest_framework.views import APIView
 from aerospike import exception
 
 from limit_counter import settings
+from services import aerospike
 from services.models import Platform, Element, Counter
 from services.serializers import (PlatformSerializer, ElementSerializer, CounterSerializer)
-from services import aerospike
+from services.aerospike_utils import *
 
 HTTP_440_FULL = 440
 HTTP_441_NOT_EXIST = 441
@@ -22,79 +23,6 @@ def api_root(request, format=None):
 	return Response({
 		'platforms': reverse('platform-list', request=request, format=format),
 	})
-
-
-#
-# def delete_record(record):
-# 	key, _, _ = record
-# 	aerospike.remove(key)
-
-def add_counter_to_record(counter_id):
-	def wrapper(record):
-		key, _, _ = record
-		aerospike.put(key, {counter_id: 0})
-
-	return wrapper
-
-
-def get_update_counter_max_value(slug, max_value):
-	def update_counter_max_value(record):
-		key, _, _ = record
-		bins = {f"{slug}Max": max_value}
-		aerospike.put(key, bins)
-
-	return update_counter_max_value
-
-
-def get_update_counter_name(old_slug, new_slug):
-	def update_counter_name(record):
-		key, _, old_bins = record
-		aerospike.remove_bin(key, [old_slug, f"{old_slug}Max"])
-		bins = {
-			new_slug: old_bins[old_slug],
-			f"{new_slug}Max": old_bins[f"{old_slug}Max"],
-		}
-		aerospike.put(key, bins)
-
-	return update_counter_name
-
-
-def delete_counter(counter_id):
-	def wrapper(record):
-		key, _, _ = record
-		aerospike.remove_bin(key, [counter_id])
-
-	return wrapper
-
-
-def update_set_name(old_name_part, new_name_part):
-	def wrapper(record):
-		key, _, bins = record
-		namespace, set_name, *_ = key
-		name_parts = set_name.split('/')
-		try:
-			index = name_parts.index(old_name_part)
-		except ValueError:
-			return
-		else:
-			name_parts[index] = new_name_part
-			aerospike.put((namespace, '/'.join(name_parts), bins['key']), bins)
-			aerospike.remove(key)
-
-	return wrapper
-
-
-def delete_set(*, platform=None, element=None):
-	def wrapper(record):
-		key, _, bins = record
-		_, set_name, *_ = key
-		name_parts = set_name.split('/')
-		if platform is not None and platform in name_parts:
-			aerospike.remove(key)
-		elif element is not None and element == name_parts[1]:
-			aerospike.remove(key)
-
-	return wrapper
 
 
 class PlatformListCreateApiView(ListCreateAPIView):
