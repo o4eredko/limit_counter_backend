@@ -150,8 +150,8 @@ class CounterDetailApiView(RetrieveUpdateDestroyAPIView):
 			callback_func = check_counter_overflow(obj.id, max_value)
 			query.foreach(callback_func)
 			if callback_func(get_overflow=True):
-				error_message = 'You cannot change it, because it will cause an' \
-								'overflow for counters that already exist'
+				error_message = 'You cannot change it, because it will cause an ' \
+								'overflow for counters in records that already exist'
 				raise ValidationError({'max_value': error_message})
 		serializer.save(slug=slug)
 
