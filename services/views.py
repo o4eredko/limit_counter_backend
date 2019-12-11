@@ -43,10 +43,10 @@ class PlatformDetailApiView(RetrieveUpdateDestroyAPIView):
 	def perform_update(self, serializer):
 		obj = self.get_object()
 		slug = slugify(serializer.validated_data.get('name', obj.slug))
+		serializer.save(slug=slug)
 		query = aerospike.query(settings.AEROSPIKE_NAMESPACE)
 		callback_func = update_set_name(obj.slug, slug)
 		query.foreach(callback_func)
-		serializer.save(slug=slug)
 
 	def perform_destroy(self, instance):
 		query = aerospike.query(settings.AEROSPIKE_NAMESPACE)
@@ -79,10 +79,10 @@ class ElementDetailApiView(RetrieveUpdateDestroyAPIView):
 	def perform_update(self, serializer):
 		obj = self.get_object()
 		slug = slugify(serializer.validated_data.get('name', obj.slug))
+		serializer.save(slug=slug)
 		query = aerospike.query(settings.AEROSPIKE_NAMESPACE)
 		callback_func = update_set_name(obj.slug, slug)
 		query.foreach(callback_func)
-		serializer.save(slug=slug)
 
 	def perform_destroy(self, instance):
 		query = aerospike.query(settings.AEROSPIKE_NAMESPACE)
@@ -103,8 +103,8 @@ class ElementDetailApiView(RetrieveUpdateDestroyAPIView):
 		if meta is not None:
 			return Response(status=HTTP_442_ALREADY_EXIST)
 
-		element = Element.objects.filter(platform__slug=platform_slug, slug=element_slug).first()
-		counters = Counter.objects.filter(element=element)
+		counters = Counter.objects.filter(element__platform__slug=platform_slug,
+										  element__slug=element_slug)
 		bins = {'key': record_id}
 		for counter in counters:
 			bins[str(counter.id)] = 0
@@ -143,16 +143,6 @@ class CounterDetailApiView(RetrieveUpdateDestroyAPIView):
 	def perform_update(self, serializer):
 		obj = self.get_object()
 		slug = slugify(serializer.validated_data.get('name', obj.slug))
-		max_value = serializer.validated_data.get('max_value', obj.max_value)
-		if obj.max_value != max_value:
-			set_name = f"{self.kwargs['platform']}/{self.kwargs['element']}"
-			query = aerospike.query(settings.AEROSPIKE_NAMESPACE, set_name)
-			callback_func = check_counter_overflow(obj.id, max_value)
-			query.foreach(callback_func)
-			if callback_func(get_overflow=True):
-				error_message = 'You cannot change it, because it will cause an ' \
-								'overflow for counters in records that already exist'
-				raise ValidationError({'max_value': error_message})
 		serializer.save(slug=slug)
 
 	def perform_destroy(self, instance):

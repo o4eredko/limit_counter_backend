@@ -177,11 +177,11 @@ class TestAerospike(TestCase):
 		self.added_records = []
 		url = reverse('element-detail', kwargs={'platform': self.platform.slug,
 												'element': self.element.slug})
-		data = {'index': 42}
+		data = {'value': 42}
 		response = self.client.post(url, data)
 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-		self.added_records.append((f"{self.platform.slug}/{self.element.slug}", data['index']))
-		self.record_id = data['index']
+		self.added_records.append((f"{self.platform.slug}/{self.element.slug}", data['value']))
+		self.record_id = data['value']
 		self.reverse_kwargs = {
 			'platform': self.platform.slug,
 			'element': self.element.slug,
@@ -192,7 +192,7 @@ class TestAerospike(TestCase):
 	def test_create_record_error_already_exist(self):
 		url = reverse('element-detail', kwargs={'platform': self.platform.slug,
 												'element': self.element.slug})
-		data = {'index': self.record_id}
+		data = {'value': self.record_id}
 		response = self.client.post(url, data)
 		self.assertEqual(response.status_code, HTTP_442_ALREADY_EXIST)
 
@@ -236,7 +236,7 @@ class TestAerospike(TestCase):
 										 platform=platform)
 
 		url = reverse('element-detail', kwargs={'platform': platform.slug, 'element': element.slug})
-		response = self.client.post(url, {'index': 1})
+		response = self.client.post(url, {'value': 1})
 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 		old_set_name = f"{platform.slug}/{element.slug}"
 		self.added_records.append((old_set_name, 1))

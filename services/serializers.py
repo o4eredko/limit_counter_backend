@@ -3,6 +3,9 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.reverse import reverse
 
+from limit_counter import settings
+from services import aerospike
+from services.aerospike_utils import check_counter_overflow
 from services.models import Platform, Element, Counter
 
 
@@ -66,7 +69,6 @@ class ElementSerializer(serializers.ModelSerializer):
 
 
 class CounterSerializer(serializers.ModelSerializer):
-	# todo to change max_value, check that records don't overflow new value
 	url = serializers.SerializerMethodField()
 	slug = serializers.ReadOnlyField()
 	max_value = serializers.IntegerField(min_value=1)
@@ -94,4 +96,20 @@ class CounterSerializer(serializers.ModelSerializer):
 			raise ValidationError("must be unique inside each element")
 		elif Counter.objects.filter(element=element, slug=slug).exists():
 			raise ValidationError("avoid similar names i.e (Group Counter, group-counter)")
+		return value
+
+	def validate_max_value(self, value):
+		if self.instance is None or self.instance.max_value == value:
+			return value
+		element_slug = self.context['view'].kwargs.get('element')
+		platform_slug = self.context['view'].kwargs.get('platform')
+		set_name = f"{platform_slug}/{element_slug}"
+
+		query = aerospike.query(settings.AEROSPIKE_NAMESPACE, set_name)
+		callback_func = check_counter_overflow(self.instance.id, value)
+		query.foreach(callback_func)
+		if callback_func(get_overflow=True):
+			error_message = ('You cannot change it, because it will cause an '
+							 'overflow for counter in records that already exist')
+			raise ValidationError(error_message)
 		return value
