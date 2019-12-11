@@ -207,7 +207,7 @@ class TestAerospike(TestCase):
 		self.assertEqual(response.status_code, HTTP_441_NOT_EXIST)
 
 	def test_increment_counter(self):
-		data = {'value': self.counter.max_value - 1}
+		data = {'value': self.counter.max_value}
 		response = self.client.post(reverse('counter-actions', kwargs=self.reverse_kwargs), data)
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -222,7 +222,7 @@ class TestAerospike(TestCase):
 		self.assertEqual(response.status_code, HTTP_440_FULL)
 
 	def test_get_after_increment_counter(self):
-		data = {'value': self.counter.max_value - 1}
+		data = {'value': self.counter.max_value}
 		response = self.client.post(reverse('counter-actions', kwargs=self.reverse_kwargs), data)
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -252,6 +252,29 @@ class TestAerospike(TestCase):
 		self.assertIsNone(meta)
 		_, meta = aerospike.exists((settings.AEROSPIKE_NAMESPACE, new_set_name, 1))
 		self.assertIsNotNone(meta)
+
+	def test_change_counter_max_value(self):
+		reverse_kwargs = {
+			'platform': self.platform.slug,
+			'element': self.element.slug,
+			'counter': self.counter.slug,
+		}
+		url = reverse('counter-detail', kwargs=reverse_kwargs)
+		data = {'max_value': self.counter.max_value + 1}
+		response = self.client.patch(url, json.dumps(data), content_type='application/json')
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+	def test_change_counter_max_value_error_overflow(self):
+		self.test_increment_counter()
+		reverse_kwargs = {
+			'platform': self.platform.slug,
+			'element': self.element.slug,
+			'counter': self.counter.slug,
+		}
+		url = reverse('counter-detail', kwargs=reverse_kwargs)
+		data = {'max_value': 5}
+		response = self.client.patch(url, json.dumps(data), content_type='application/json')
+		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 	def tearDown(self) -> None:
 		for set_name, key in self.added_records:

@@ -1,6 +1,7 @@
 from django.utils.text import slugify
 from rest_framework import status
 from rest_framework.decorators import api_view
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
@@ -41,7 +42,7 @@ class PlatformDetailApiView(RetrieveUpdateDestroyAPIView):
 
 	def perform_update(self, serializer):
 		obj = self.get_object()
-		slug = slugify(serializer.validated_data['name'])
+		slug = slugify(serializer.validated_data.get('name', obj.slug))
 		query = aerospike.query(settings.AEROSPIKE_NAMESPACE)
 		callback_func = update_set_name(obj.slug, slug)
 		query.foreach(callback_func)
@@ -77,7 +78,7 @@ class ElementDetailApiView(RetrieveUpdateDestroyAPIView):
 
 	def perform_update(self, serializer):
 		obj = self.get_object()
-		slug = slugify(serializer.validated_data['name'])
+		slug = slugify(serializer.validated_data.get('name', obj.slug))
 		query = aerospike.query(settings.AEROSPIKE_NAMESPACE)
 		callback_func = update_set_name(obj.slug, slug)
 		query.foreach(callback_func)
@@ -140,7 +141,18 @@ class CounterDetailApiView(RetrieveUpdateDestroyAPIView):
 									  element__slug=self.kwargs['element'])
 
 	def perform_update(self, serializer):
-		slug = slugify(serializer.validated_data['name'])
+		obj = self.get_object()
+		slug = slugify(serializer.validated_data.get('name', obj.slug))
+		max_value = serializer.validated_data.get('max_value', obj.max_value)
+		if obj.max_value != max_value:
+			set_name = f"{self.kwargs['platform']}/{self.kwargs['element']}"
+			query = aerospike.query(settings.AEROSPIKE_NAMESPACE, set_name)
+			callback_func = check_counter_overflow(obj.id, max_value)
+			query.foreach(callback_func)
+			if callback_func(get_overflow=True):
+				error_message = 'You cannot change it, because it will cause an' \
+								'overflow for counters that already exist'
+				raise ValidationError({'max_value': error_message})
 		serializer.save(slug=slug)
 
 	def perform_destroy(self, instance):

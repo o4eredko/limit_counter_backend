@@ -1,6 +1,5 @@
 from services import aerospike
 
-# todo possible to move these function to Class with __call__ method
 
 def update_set_name(old_name_part, new_name_part):
 	def wrapper(record):
@@ -47,7 +46,16 @@ def delete_counter(counter_id):
 
 	return wrapper
 
-#
-# def delete_record(record):
-# 	key, _, _ = record
-# 	aerospike.remove(key)
+
+def check_counter_overflow(counter_id=None, new_max_value=None):
+	overflow = False
+
+	def wrapper(record=None, *, get_overflow=False):
+		nonlocal overflow
+		if get_overflow:
+			return overflow
+		key, _, bins = record
+		if bins[str(counter_id)] > new_max_value:
+			overflow = True
+
+	return wrapper

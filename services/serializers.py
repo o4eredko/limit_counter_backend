@@ -61,7 +61,7 @@ class ElementSerializer(serializers.ModelSerializer):
 		if Element.objects.filter(platform__slug=platform_slug, name=value).exists():
 			raise ValidationError("must be unique inside each platform")
 		elif Element.objects.filter(platform__slug=platform_slug, slug=slug).exists():
-			raise ValidationError("avoid similar names i.e (Google google, face-book Face Book)")
+			raise ValidationError("avoid similar names i.e (Ad Groups and ad-groups)")
 		return value
 
 
@@ -93,5 +93,5 @@ class CounterSerializer(serializers.ModelSerializer):
 		if Counter.objects.filter(element=element, name=value).exists():
 			raise ValidationError("must be unique inside each element")
 		elif Counter.objects.filter(element=element, slug=slug).exists():
-			raise ValidationError("avoid similar names i.e (Google google, face-book Face Book)")
+			raise ValidationError("avoid similar names i.e (Group Counter, group-counter)")
 		return value
