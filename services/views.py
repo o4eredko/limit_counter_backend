@@ -92,9 +92,9 @@ class ElementDetailApiView(RetrieveUpdateDestroyAPIView):
 
 	def post(self, request, *args, **kwargs):
 		try:
-			record_id = int(request.data['index'])
+			record_id = int(request.data['value'])
 		except (KeyError, ValueError):
-			return Response({'index': 'must be an Integer'}, status=status.HTTP_400_BAD_REQUEST)
+			return Response({'value': 'must be an Integer'}, status=status.HTTP_400_BAD_REQUEST)
 
 		element_slug = kwargs['element']
 		platform_slug = kwargs['platform']
