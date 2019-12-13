@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 from aerospike import exception
 
 from limit_counter import settings
-from services import aerospike
+from services.aerospike import aerospike
 from services.models import Platform, Element, Counter
 from services.serializers import (PlatformSerializer, ElementSerializer, CounterSerializer)
 from services.aerospike_utils import *

@@ -4,7 +4,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.reverse import reverse
 
 from limit_counter import settings
-from services import aerospike
+from services.aerospike import aerospike
 from services.aerospike_utils import check_counter_overflow
 from services.models import Platform, Element, Counter
 

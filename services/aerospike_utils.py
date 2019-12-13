@@ -1,4 +1,4 @@
-from services import aerospike
+from services.aerospike import aerospike
 
 
 def update_set_name(old_name_part, new_name_part):

@@ -6,7 +6,7 @@ from rest_framework.reverse import reverse
 from aerospike import exception
 
 from limit_counter import settings
-from services import aerospike
+from services.aerospike import aerospike
 from services.models import Platform, Element, Counter
 from services.views import HTTP_441_NOT_EXIST, HTTP_440_FULL, HTTP_442_ALREADY_EXIST
 
