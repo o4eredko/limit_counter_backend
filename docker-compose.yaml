@@ -1,0 +1,22 @@
+version: '3.7'
+services:
+  rest_api:
+    container_name: rest_api
+    build: .
+    ports:
+      - "8000:8000"
+    depends_on:
+      - "aerospike"
+    networks:
+      - limit_counter
+    volumes:
+      - ./:/code
+  aerospike:
+    container_name: aerospike
+    image: aerospike
+    networks:
+      - limit_counter
+networks:
+  limit_counter:
+    name: limit_counter
+    driver: bridge
