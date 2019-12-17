@@ -42,7 +42,7 @@ def add_counter_to_record(counter_id):
 def delete_counter(counter_id):
 	def wrapper(record):
 		key, _, _ = record
-		aerospike.remove_bin(key, [counter_id])
+		aerospike.remove_bin(key, [str(counter_id)])
 
 	return wrapper
 

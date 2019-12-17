@@ -93,6 +93,9 @@ class ElementDetailApiView(RetrieveUpdateDestroyAPIView):
 	def post(self, request, *args, **kwargs):
 		try:
 			record_id = int(request.data['value'])
+			if record_id <= 0:
+				message = {'value': 'must be more than or equal to 1'}
+				return Response(message, status=status.HTTP_400_BAD_REQUEST)
 		except (KeyError, ValueError):
 			return Response({'value': 'must be an Integer'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -101,7 +104,8 @@ class ElementDetailApiView(RetrieveUpdateDestroyAPIView):
 		key = (settings.AEROSPIKE_NAMESPACE, f"{platform_slug}/{element_slug}", record_id)
 		_, meta = aerospike.exists(key)
 		if meta is not None:
-			return Response(status=HTTP_442_ALREADY_EXIST)
+			message = {'value': 'record with this value already exists'}
+			return Response(message, status=HTTP_442_ALREADY_EXIST)
 
 		counters = Counter.objects.filter(element__platform__slug=platform_slug,
 										  element__slug=element_slug)
