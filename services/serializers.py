@@ -40,10 +40,11 @@ class ElementSerializer(serializers.ModelSerializer):
 	url = serializers.SerializerMethodField()
 	slug = serializers.ReadOnlyField()
 	counters_url = serializers.SerializerMethodField()
+	records_url = serializers.SerializerMethodField()
 
 	class Meta:
 		model = Element
-		fields = ('name', 'slug', 'url', 'counters_url')
+		fields = ('name', 'slug', 'url', 'counters_url', 'records_url')
 
 	def get_url(self, obj):
 		request = self.context.get('request')
@@ -53,6 +54,11 @@ class ElementSerializer(serializers.ModelSerializer):
 	def get_counters_url(self, obj):
 		request = self.context.get('request')
 		url = reverse('counter-list', kwargs={'platform': obj.platform.slug, 'element': obj.slug})
+		return request.build_absolute_uri(url)
+
+	def get_records_url(self, obj):
+		request = self.context.get('request')
+		url = reverse('record-list', kwargs={'platform': obj.platform.slug, 'element': obj.slug})
 		return request.build_absolute_uri(url)
 
 	def validate_name(self, value):

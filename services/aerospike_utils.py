@@ -63,7 +63,11 @@ def check_counter_overflow(counter_id=None, new_max_value=None):
 
 
 def convert_results(results):
-	for (key, _, bins) in results:
-		bins = {Counter.objects.get(id=int(counter_id)).slug: counter_value
-				for (counter_id, counter_value) in bins.items() if counter_id != 'key'}
-		yield {'key': key[:-1], 'bins': bins}
+	for ((*_, record_id, _), _, bins) in results:
+		record = {'id': record_id}
+		for (counter_id, counter_value) in bins.items():
+			if counter_id == 'key':
+				continue
+			counter = Counter.objects.get(id=int(counter_id))
+			record[counter.slug] = f"{counter_value}/{counter.max_value}"
+		yield record
