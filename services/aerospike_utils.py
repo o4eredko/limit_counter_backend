@@ -1,4 +1,5 @@
-from services.aerospike import aerospike
+from services import aerospike_db
+from services.models import Counter
 
 
 def update_set_name(old_name_part, new_name_part):
@@ -12,8 +13,8 @@ def update_set_name(old_name_part, new_name_part):
 			return
 		else:
 			name_parts[index] = new_name_part
-			aerospike.put((namespace, '/'.join(name_parts), bins['key']), bins)
-			aerospike.remove(key)
+			aerospike_db.put((namespace, '/'.join(name_parts), bins['key']), bins)
+			aerospike_db.remove(key)
 
 	return wrapper
 
@@ -24,9 +25,9 @@ def delete_set(*, platform=None, element=None):
 		_, set_name, *_ = key
 		name_parts = set_name.split('/')
 		if platform is not None and platform in name_parts:
-			aerospike.remove(key)
+			aerospike_db.remove(key)
 		elif element is not None and element == name_parts[1]:
-			aerospike.remove(key)
+			aerospike_db.remove(key)
 
 	return wrapper
 
@@ -34,7 +35,7 @@ def delete_set(*, platform=None, element=None):
 def add_counter_to_record(counter_id):
 	def wrapper(record):
 		key, _, _ = record
-		aerospike.put(key, {counter_id: 0})
+		aerospike_db.put(key, {str(counter_id): 0})
 
 	return wrapper
 
@@ -42,7 +43,7 @@ def add_counter_to_record(counter_id):
 def delete_counter(counter_id):
 	def wrapper(record):
 		key, _, _ = record
-		aerospike.remove_bin(key, [str(counter_id)])
+		aerospike_db.remove_bin(key, [str(counter_id)])
 
 	return wrapper
 
@@ -59,3 +60,10 @@ def check_counter_overflow(counter_id=None, new_max_value=None):
 			overflow = True
 
 	return wrapper
+
+
+def convert_results(results):
+	for (key, _, bins) in results:
+		bins = {Counter.objects.get(id=int(counter_id)).slug: counter_value
+				for (counter_id, counter_value) in bins.items() if counter_id != 'key'}
+		yield {'key': key[:-1], 'bins': bins}

@@ -1,10 +1,10 @@
 from django.utils.text import slugify
+from django.conf import settings
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.reverse import reverse
 
-from limit_counter import settings
-from services.aerospike import aerospike
+from services import aerospike_db
 from services.aerospike_utils import check_counter_overflow
 from services.models import Platform, Element, Counter
 
@@ -105,7 +105,7 @@ class CounterSerializer(serializers.ModelSerializer):
 		platform_slug = self.context['view'].kwargs.get('platform')
 		set_name = f"{platform_slug}/{element_slug}"
 
-		query = aerospike.query(settings.AEROSPIKE_NAMESPACE, set_name)
+		query = aerospike_db.query(settings.AEROSPIKE_NAMESPACE, set_name)
 		callback_func = check_counter_overflow(self.instance.id, value)
 		query.foreach(callback_func)
 		if callback_func(get_overflow=True):

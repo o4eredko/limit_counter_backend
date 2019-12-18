@@ -13,6 +13,10 @@ urlpatterns = [
 
 	path('<slug:platform>/<slug:element>/counters/',
 		 CounterListCreateApiView.as_view(), name='counter-list'),
+
+	path('<slug:platform>/<slug:element>/records/',
+		 RecordListCreateApiView.as_view(), name='record-list'),
+
 	path('<slug:platform>/<slug:element>/<slug:counter>/',
 		 CounterDetailApiView.as_view(), name='counter-detail'),
 

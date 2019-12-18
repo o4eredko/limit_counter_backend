@@ -1,12 +1,12 @@
 import json
 
-from django.test import TestCase
+from django.conf import settings
+from django.test import TestCase, override_settings
 from rest_framework import status
 from rest_framework.reverse import reverse
 from aerospike import exception
 
-from limit_counter import settings
-from services.aerospike import aerospike
+from services import aerospike_db
 from services.models import Platform, Element, Counter
 from services.views import HTTP_441_NOT_EXIST, HTTP_440_FULL, HTTP_442_ALREADY_EXIST
 
@@ -164,6 +164,7 @@ class TestCounters(TestCase):
 		self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
 
+@override_settings(AEROSPIKE_NAMESPACE='test')
 class TestAerospike(TestCase):
 	@classmethod
 	def setUpTestData(cls):
@@ -175,8 +176,8 @@ class TestAerospike(TestCase):
 
 	def setUp(self) -> None:
 		self.added_records = []
-		url = reverse('element-detail', kwargs={'platform': self.platform.slug,
-												'element': self.element.slug})
+		url = reverse('record-list', kwargs={'platform': self.platform.slug,
+											 'element': self.element.slug})
 		data = {'value': 42}
 		response = self.client.post(url, data)
 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -190,7 +191,7 @@ class TestAerospike(TestCase):
 		}
 
 	def test_create_record_error_already_exist(self):
-		url = reverse('element-detail', kwargs={'platform': self.platform.slug,
+		url = reverse('record-list', kwargs={'platform': self.platform.slug,
 												'element': self.element.slug})
 		data = {'value': self.record_id}
 		response = self.client.post(url, data)
@@ -235,7 +236,7 @@ class TestAerospike(TestCase):
 		element = Element.objects.create(name='Test Element', slug='test-element',
 										 platform=platform)
 
-		url = reverse('element-detail', kwargs={'platform': platform.slug, 'element': element.slug})
+		url = reverse('record-list', kwargs={'platform': platform.slug, 'element': element.slug})
 		response = self.client.post(url, {'value': 1})
 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 		old_set_name = f"{platform.slug}/{element.slug}"
@@ -248,9 +249,9 @@ class TestAerospike(TestCase):
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 		self.added_records.append((new_set_name, 1))
 
-		_, meta = aerospike.exists((settings.AEROSPIKE_NAMESPACE, old_set_name, 1))
+		_, meta = aerospike_db.exists((settings.AEROSPIKE_NAMESPACE, old_set_name, 1))
 		self.assertIsNone(meta)
-		_, meta = aerospike.exists((settings.AEROSPIKE_NAMESPACE, new_set_name, 1))
+		_, meta = aerospike_db.exists((settings.AEROSPIKE_NAMESPACE, new_set_name, 1))
 		self.assertIsNotNone(meta)
 
 	def test_change_counter_max_value(self):
@@ -279,6 +280,6 @@ class TestAerospike(TestCase):
 	def tearDown(self) -> None:
 		for set_name, key in self.added_records:
 			try:
-				aerospike.remove((settings.AEROSPIKE_NAMESPACE, set_name, key))
+				aerospike_db.remove((settings.AEROSPIKE_NAMESPACE, set_name, key))
 			except exception.AerospikeError:
 				pass
