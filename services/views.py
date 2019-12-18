@@ -102,29 +102,19 @@ class RecordListCreateApiView(APIView):
 		except (KeyError, ValueError):
 			return Response({'value': 'must be an integer'}, status=status.HTTP_400_BAD_REQUEST)
 
-		element_slug = self.kwargs['element']
-		platform_slug = self.kwargs['platform']
-		key = (settings.AEROSPIKE_NAMESPACE, f"{platform_slug}/{element_slug}", record_id)
+		key = (settings.AEROSPIKE_NAMESPACE, f"{kwargs['platform']}/{kwargs['element']}", record_id)
 		_, meta = aerospike_db.exists(key)
 		if meta is not None:
 			message = {'value': 'record with this value already exists'}
 			return Response(message, status=HTTP_442_ALREADY_EXIST)
 
-		counters = Counter.objects.filter(element__platform__slug=platform_slug,
-										  element__slug=element_slug)
+		counters = Counter.objects.filter(
+			element__platform__slug=kwargs['platform'], element__slug=kwargs['element'])
 		bins = {str(counter.id): 0 for counter in counters}
-		bins['key'] = record_id
+		response = {counter.slug: f"0/{counter.max_value}" for counter in counters}
+		response['id'] = bins['id'] = record_id
 		aerospike_db.put(key, bins)
-		return Response(status=status.HTTP_201_CREATED)
-
-
-@api_view(['GET'])
-def record_list(request, **kwargs):
-	element_slug = kwargs['element']
-	platform_slug = kwargs['platform']
-	scan = aerospike_db.query(settings.AEROSPIKE_NAMESPACE, f"{platform_slug}/{element_slug}")
-	pprint(scan.results())
-	return Response([], status=status.HTTP_200_OK)
+		return Response(response, status=status.HTTP_201_CREATED)
 
 
 class CounterListCreateApiView(ListCreateAPIView):

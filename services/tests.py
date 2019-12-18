@@ -178,6 +178,47 @@ class TestCounters(TestCase):
 		response = self.client.delete(url)
 		self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
+
+@override_settings(AEROSPIKE_NAMESPACE='test')
+class TestRecords(TestCase):
+	@classmethod
+	def setUpTestData(cls):
+		cls.platform = Platform.objects.create(name='Test Platform', slug='test-platform')
+		cls.element = Element.objects.create(
+			name='Test Element', slug='test-element', platform=cls.platform
+		)
+		reverse_kwargs = {'platform': cls.platform.slug, 'element': cls.element.slug}
+		cls.records_url = reverse('record-list', kwargs=reverse_kwargs)
+
+	def setUp(self) -> None:
+		self.added_records = []
+
+	def test_url_accessible_by_name(self):
+		response = self.client.get(self.records_url)
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+	def test_create(self):
+		data = {'value': 1}
+		response = self.client.post(self.records_url, data)
+		self.added_records.append((f"{self.platform.slug}/{self.element.slug}", data['value']))
+		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+	def test_create_error_record_exists(self):
+		self.test_create()
+		response = self.client.post(self.records_url, {'value': 1})
+		self.assertEqual(response.status_code, HTTP_442_ALREADY_EXIST)
+
+	def test_create_error_invalid_index(self):
+		response = self.client.post(self.records_url, {'value': 'abc'})
+		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+	def tearDown(self) -> None:
+		for set_name, key in self.added_records:
+			try:
+				aerospike_db.remove((settings.AEROSPIKE_NAMESPACE, set_name, key))
+			except exception.AerospikeError:
+				pass
+
 # @override_settings(AEROSPIKE_NAMESPACE='test')
 # class TestAerospike(TestCase):
 # 	@classmethod
