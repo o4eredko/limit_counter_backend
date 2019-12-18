@@ -1,3 +1,5 @@
+import collections
+
 from services import aerospike_db
 from services.models import Counter
 
@@ -63,8 +65,8 @@ def check_counter_overflow(counter_id=None, new_max_value=None):
 
 
 def convert_results(results):
-	for ((*_, record_id, _), _, bins) in results:
-		record = {'id': record_id}
+	for (_, _, bins) in results:
+		record = collections.OrderedDict(id=bins['key'])
 		for (counter_id, counter_value) in bins.items():
 			if counter_id == 'key':
 				continue
