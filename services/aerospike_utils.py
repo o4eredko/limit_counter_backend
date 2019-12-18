@@ -21,19 +21,6 @@ def update_set_name(old_name_part, new_name_part):
 	return wrapper
 
 
-def delete_set(*, platform=None, element=None):
-	def wrapper(record):
-		key, _, bins = record
-		_, set_name, *_ = key
-		name_parts = set_name.split('/')
-		if platform is not None and platform in name_parts:
-			aerospike_db.remove(key)
-		elif element is not None and element == name_parts[1]:
-			aerospike_db.remove(key)
-
-	return wrapper
-
-
 def add_counter_to_record(counter_id):
 	def wrapper(record):
 		key, _, _ = record
@@ -66,9 +53,9 @@ def check_counter_overflow(counter_id=None, new_max_value=None):
 
 def convert_results(results):
 	for (_, _, bins) in results:
-		record = collections.OrderedDict(id=bins['key'])
+		record = collections.OrderedDict(id=bins['id'])
 		for (counter_id, counter_value) in bins.items():
-			if counter_id == 'key':
+			if counter_id == 'id':
 				continue
 			counter = Counter.objects.get(id=int(counter_id))
 			record[counter.slug] = f"{counter_value}/{counter.max_value}"

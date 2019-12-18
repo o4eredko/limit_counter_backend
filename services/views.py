@@ -1,4 +1,3 @@
-from pprint import pprint
 from django.conf import settings
 from django.utils.text import slugify
 from rest_framework import status
@@ -48,9 +47,10 @@ class PlatformDetailApiView(RetrieveUpdateDestroyAPIView):
 		query.foreach(callback_func)
 
 	def perform_destroy(self, instance):
-		query = aerospike_db.query(settings.AEROSPIKE_NAMESPACE)
-		callback_func = delete_set(platform=instance.slug)
-		query.foreach(callback_func)
+		elements = Element.objects.filter(platform=instance)
+		for element in elements:
+			set_name = f"{instance.slug}/{element.slug}"
+			aerospike_db.truncate(settings.AEROSPIKE_NAMESPACE, set_name, 0)
 		instance.delete()
 
 
@@ -84,9 +84,8 @@ class ElementDetailApiView(RetrieveUpdateDestroyAPIView):
 		query.foreach(callback_func)
 
 	def perform_destroy(self, instance):
-		query = aerospike_db.query(settings.AEROSPIKE_NAMESPACE)
-		callback_func = delete_set(element=instance.slug)
-		query.foreach(callback_func)
+		set_name = f"{instance.platform.slug}/{instance.slug}"
+		aerospike_db.truncate(settings.AEROSPIKE_NAMESPACE, set_name, 0)
 		instance.delete()
 
 
@@ -161,38 +160,43 @@ class CounterDetailApiView(RetrieveUpdateDestroyAPIView):
 
 
 class CounterActionsApiView(APIView):
-	def get(self, request, *args, **kwargs):
-		element_slug = kwargs['element']
-		platform_slug = kwargs['platform']
-		key = (settings.AEROSPIKE_NAMESPACE, f"{platform_slug}/{element_slug}", kwargs['uid'])
-		counter = Counter.objects.filter(element__platform__slug=platform_slug,
-										 element__slug=element_slug,
-										 slug=kwargs['counter']).first()
-		try:
-			_, _, bins = aerospike_db.get(key)
-			result = bins[str(counter.id)]
-		except (exception.AerospikeError, AttributeError):
-			return Response(status=HTTP_441_NOT_EXIST)
-		return Response(result, status=status.HTTP_200_OK)
+	def get_record_key(self):
+		set_name = f"{self.kwargs['platform']}/{self.kwargs['element']}"
+		return settings.AEROSPIKE_NAMESPACE, set_name, self.kwargs['uid']
 
-	def post(self, request, *args, **kwargs):
+	def get_counter_with_value(self, key):
+		counter = Counter.objects.get(
+			element__platform__slug=self.kwargs['platform'],
+			element__slug=self.kwargs['element'],
+			slug=self.kwargs['counter']
+		)
+		_, _, bins = aerospike_db.get(key)
+		return counter, bins[str(counter.id)]
+
+	def get(self, request, **kwargs):
+		key = self.get_record_key()
+		try:
+			_, counter_value = self.get_counter_with_value(key)
+		except (exception.AerospikeError, Counter.DoesNotExist):
+			return Response(status=HTTP_441_NOT_EXIST)
+		return Response(counter_value, status=status.HTTP_200_OK)
+
+	def post(self, request, **kwargs):
 		try:
 			value = int(request.data['value'])
+			if value < 0:
+				raise ValueError()
 		except (KeyError, ValueError):
-			return Response({'value': 'must be an Integer'}, status=status.HTTP_400_BAD_REQUEST)
+			message = {'value': 'must be a positive integer'}
+			return Response(message, status=status.HTTP_400_BAD_REQUEST)
 
-		element_slug = kwargs['element']
-		platform_slug = kwargs['platform']
-		key = (settings.AEROSPIKE_NAMESPACE, f"{platform_slug}/{element_slug}", kwargs['uid'])
-		counter = Counter.objects.filter(element__slug=element_slug,
-										 slug=kwargs['counter']).first()
+		key = self.get_record_key()
 		try:
-			_, _, bins = aerospike_db.get(key)
-			counter_value = bins[str(counter.id)]
-		except (exception.AerospikeError, KeyError):
+			counter, counter_value = self.get_counter_with_value(key)
+		except (exception.AerospikeError, Counter.DoesNotExist):
 			return Response(status=HTTP_441_NOT_EXIST)
 
 		if counter_value + value > counter.max_value:
 			return Response(status=HTTP_440_FULL)
 		aerospike_db.increment(key, str(counter.id), value)
-		return Response(status=status.HTTP_200_OK)
+		return Response(counter_value + value, status=status.HTTP_200_OK)

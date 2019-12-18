@@ -183,12 +183,11 @@ class TestCounters(TestCase):
 class TestRecords(TestCase):
 	@classmethod
 	def setUpTestData(cls):
-		cls.platform = Platform.objects.create(name='Test Platform', slug='test-platform')
-		cls.element = Element.objects.create(
-			name='Test Element', slug='test-element', platform=cls.platform
-		)
-		reverse_kwargs = {'platform': cls.platform.slug, 'element': cls.element.slug}
-		cls.records_url = reverse('record-list', kwargs=reverse_kwargs)
+		name = 'Test Records'
+		slug = 'test-records'
+		cls.platform = Platform.objects.create(name=name, slug=slug)
+		cls.element = Element.objects.create(name=name, slug=slug, platform=cls.platform)
+		cls.records_url = reverse('record-list', kwargs={'platform': slug, 'element': slug})
 
 	def setUp(self) -> None:
 		self.added_records = []
@@ -219,122 +218,180 @@ class TestRecords(TestCase):
 			except exception.AerospikeError:
 				pass
 
-# @override_settings(AEROSPIKE_NAMESPACE='test')
-# class TestAerospike(TestCase):
+
+@override_settings(AEROSPIKE_NAMESPACE='test')
+class TestCounterActions(TestCase):
+	@classmethod
+	def setUpTestData(cls):
+		name = 'Test Counter Actions'
+		slug = 'test-counter-actions'
+		cls.platform = Platform.objects.create(name=name, slug=slug)
+		cls.element = Element.objects.create(name=name, slug=slug, platform=cls.platform)
+		cls.counter = Counter.objects.create(
+			name=name, slug=slug, max_value=20, element=cls.element)
+		cls.records_url = reverse('record-list', kwargs={'platform': slug, 'element': slug})
+
+	def setUp(self) -> None:
+		self.added_records = []
+		data = {'value': 2}
+		response = self.client.post(self.records_url, data)
+		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+		self.added_records.append((f"{self.platform.slug}/{self.element.slug}", data['value']))
+
+		self.reverse_kwargs = {
+			'platform': self.platform.slug,
+			'element': self.element.slug,
+			'uid': data['value'],
+			'counter': self.counter.slug,
+		}
+		self.counter_actions_url = reverse('counter-actions', kwargs=self.reverse_kwargs)
+
+	def test_get_counter(self):
+		response = self.client.get(self.counter_actions_url)
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.assertEqual(response.data, 0)
+
+	def test_get_counter_error_not_exist(self):
+		self.reverse_kwargs['uid'] = 2147483647
+		response = self.client.get(reverse('counter-actions', kwargs=self.reverse_kwargs))
+		self.assertEqual(response.status_code, HTTP_441_NOT_EXIST)
+
+	def test_increment_counter(self):
+		response = self.client.post(self.counter_actions_url, {'value': self.counter.max_value})
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+	def test_increment_counter_error_invalid_value(self):
+		response = self.client.post(self.counter_actions_url, {'value': 'string'})
+		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+	def test_increment_error_negative_value(self):
+		response = self.client.post(self.counter_actions_url, {'value': -1})
+		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+	def test_increment_counter_error_overflow(self):
+		data = {'value': self.counter.max_value + 1}
+		response = self.client.post(self.counter_actions_url, data)
+		self.assertEqual(response.status_code, HTTP_440_FULL)
+
+	def test_get_after_increment_counter(self):
+		data = {'value': self.counter.max_value}
+		response = self.client.post(self.counter_actions_url, data)
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.assertEqual(response.data, data['value'])
+
+		response = self.client.get(self.counter_actions_url)
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.assertEqual(response.data, data['value'])
+
+	def tearDown(self) -> None:
+		for set_name, key in self.added_records:
+			try:
+				aerospike_db.remove((settings.AEROSPIKE_NAMESPACE, set_name, key))
+			except exception.AerospikeError:
+				pass
+
+# class TestAerospikeChangeStructure(TestCase):
 # 	@classmethod
 # 	def setUpTestData(cls):
-# 		cls.platform = Platform.objects.create(name='Test Platform', slug='test-platform')
-# 		cls.element = Element.objects.create(name='Test Element', slug='test-element',
-# 											 platform=cls.platform)
-# 		cls.counter = Counter.objects.create(name='Test Counter', slug='test-counter', max_value=20,
-# 											 element=cls.element)
+# 		pass
+
+# cls.platform = Platform.objects.create(name='Test Platform', slug='test-platform')
+# cls.element = Element.objects.create(
+# 	name='Test Element', slug='test-element', platform=cls.platform)
+# cls.counter = Counter.objects.create(
+# 	name='Test Counter', slug='test-counter', max_value=20, element=cls.element)
+# reverse_kwargs = {'platform': cls.platform.slug, 'element': cls.element.slug}
+# cls.records_url = reverse('record-list', kwargs=reverse_kwargs)
+
+# def setUp(self) -> None:
+# 	self.added_records = []
+
+# data = {'value': 3}
+# response = self.client.post(self.records_url, data)
+# self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+# self.added_records.append((f"{self.platform.slug}/{self.element.slug}", data['value']))
+
+# self.reverse_kwargs = {
+# 	'platform': self.platform.slug,
+# 	'element': self.element.slug,
+# 	'uid': data['value'],
+# 	'counter': self.counter.slug,
+# }
+# self.counter_actions_url = reverse('counter-actions', kwargs=self.reverse_kwargs)
+
+# def test_delete_platform(self):
+# 	# Structure elements for deletion
+# 	platform = Platform.objects.create(name='For Delete', slug='for-delete')
+# 	element = Element.objects.create(name='For Delete', slug='for-delete', platform=platform)
+# 	element2 = Element.objects.create(name='For Delete2', slug='for-delete2', platform=platform)
+# 	Counter.objects.create(name='For Delete', slug='for-delete', max_value=20, element=element)
+# 	Counter.objects.create(name='For Delete', slug='for-delete', max_value=20, element=element2)
 #
-# 	def setUp(self) -> None:
-# 		self.added_records = []
-# 		url = reverse('record-list', kwargs={'platform': self.platform.slug,
-# 											 'element': self.element.slug})
-# 		data = {'value': 42}
-# 		response = self.client.post(url, data)
-# 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-# 		self.added_records.append((f"{self.platform.slug}/{self.element.slug}", data['value']))
-# 		self.record_id = data['value']
-# 		self.reverse_kwargs = {
-# 			'platform': self.platform.slug,
-# 			'element': self.element.slug,
-# 			'uid': self.record_id,
-# 			'counter': self.counter.slug,
-# 		}
+# 	# Records in aerospike inside different sets
+# 	reverse_kwargs = {'platform': platform.slug, 'element': element.slug}
+# 	self.client.post(reverse('record-list', kwargs=reverse_kwargs), {'value': 42})
+# 	self.added_records.append((f"{platform.slug}/{element.slug}", 42))
+# 	reverse_kwargs = {'platform': platform.slug, 'element': element2.slug}
+# 	self.client.post(reverse('record-list', kwargs=reverse_kwargs), {'value': 42})
+# 	self.added_records.append((f"{platform.slug}/{element.slug}", 42))
 #
-# 	def test_create_record_error_already_exist(self):
-# 		url = reverse('record-list', kwargs={'platform': self.platform.slug,
-# 												'element': self.element.slug})
-# 		data = {'value': self.record_id}
-# 		response = self.client.post(url, data)
-# 		self.assertEqual(response.status_code, HTTP_442_ALREADY_EXIST)
+# 	response = self.client.post(reverse('platform-detail', kwargs={'platform': platform}))
+# 	self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 #
-# 	def test_get_counter(self):
-# 		response = self.client.get(reverse('counter-actions', kwargs=self.reverse_kwargs))
-# 		self.assertEqual(response.status_code, status.HTTP_200_OK)
-# 		self.assertEqual(response.data, 0)
+# 	results = aerospike_db.scan(settings.AEROSPIKE_NAMESPACE, element.slug).results()
+# 	self.assertEqual(len(results), 0)
+# 	results = aerospike_db.scan(settings.AEROSPIKE_NAMESPACE, element2.slug).results()
+# 	self.assertEqual(len(results), 0)
+
+# def test_change_set_name(self):
+# 	platform = Platform.objects.create(name='Platform To Update', slug='platform-to-update')
+# 	element = Element.objects.create(
+# 		name='Test Element', slug='test-element', platform=platform)
 #
-# 	def test_get_counter_error_wrong_record_id(self):
-# 		self.reverse_kwargs['uid'] = 2147483647
-# 		response = self.client.get(reverse('counter-actions', kwargs=self.reverse_kwargs))
-# 		self.assertEqual(response.status_code, HTTP_441_NOT_EXIST)
+# 	url = reverse('record-list', kwargs={'platform': platform.slug, 'element': element.slug})
+# 	response = self.client.post(url, {'value': 1})
+# 	self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+# 	old_set_name = f"{platform.slug}/{element.slug}"
+# 	self.added_records.append((old_set_name, 1))
 #
-# 	def test_increment_counter(self):
-# 		data = {'value': self.counter.max_value}
-# 		response = self.client.post(reverse('counter-actions', kwargs=self.reverse_kwargs), data)
-# 		self.assertEqual(response.status_code, status.HTTP_200_OK)
+# 	data = {'name': 'Platform Was Updated'}
+# 	url = reverse('platform-detail', kwargs={'platform': platform.slug})
+# 	response = self.client.patch(url, json.dumps(data), content_type='application/json')
+# 	new_set_name = f"{response.data['slug']}/{element.slug}"
+# 	self.assertEqual(response.status_code, status.HTTP_200_OK)
+# 	self.added_records.append((new_set_name, 1))
 #
-# 	def test_increment_counter_error_wrong_value(self):
-# 		data = {'value': 'string'}
-# 		response = self.client.post(reverse('counter-actions', kwargs=self.reverse_kwargs), data)
-# 		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+# 	_, meta = aerospike_db.exists((settings.AEROSPIKE_NAMESPACE, old_set_name, 1))
+# 	self.assertIsNone(meta)
+# 	_, meta = aerospike_db.exists((settings.AEROSPIKE_NAMESPACE, new_set_name, 1))
+# 	self.assertIsNotNone(meta)
+
+# def test_change_counter_max_value(self):
+# 	reverse_kwargs = {
+# 		'platform': self.platform.slug,
+# 		'element': self.element.slug,
+# 		'counter': self.counter.slug,
+# 	}
+# 	url = reverse('counter-detail', kwargs=reverse_kwargs)
+# 	data = {'max_value': self.counter.max_value + 1}
+# 	response = self.client.patch(url, json.dumps(data), content_type='application/json')
+# 	self.assertEqual(response.status_code, status.HTTP_200_OK)
 #
-# 	def test_increment_counter_error_overflow(self):
-# 		data = {'value': self.counter.max_value + 1}
-# 		response = self.client.post(reverse('counter-actions', kwargs=self.reverse_kwargs), data)
-# 		self.assertEqual(response.status_code, HTTP_440_FULL)
-#
-# 	def test_get_after_increment_counter(self):
-# 		data = {'value': self.counter.max_value}
-# 		response = self.client.post(reverse('counter-actions', kwargs=self.reverse_kwargs), data)
-# 		self.assertEqual(response.status_code, status.HTTP_200_OK)
-#
-# 		response = self.client.get(reverse('counter-actions', kwargs=self.reverse_kwargs))
-# 		self.assertEqual(response.status_code, status.HTTP_200_OK)
-# 		self.assertEqual(response.data, data['value'])
-#
-# 	def test_change_set_name(self):
-# 		platform = Platform.objects.create(name='Platform To Update', slug='platform-to-update')
-# 		element = Element.objects.create(name='Test Element', slug='test-element',
-# 										 platform=platform)
-#
-# 		url = reverse('record-list', kwargs={'platform': platform.slug, 'element': element.slug})
-# 		response = self.client.post(url, {'value': 1})
-# 		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-# 		old_set_name = f"{platform.slug}/{element.slug}"
-# 		self.added_records.append((old_set_name, 1))
-#
-# 		data = {'name': 'Platform Was Updated'}
-# 		url = reverse('platform-detail', kwargs={'platform': platform.slug})
-# 		response = self.client.patch(url, json.dumps(data), content_type='application/json')
-# 		new_set_name = f"{response.data['slug']}/{element.slug}"
-# 		self.assertEqual(response.status_code, status.HTTP_200_OK)
-# 		self.added_records.append((new_set_name, 1))
-#
-# 		_, meta = aerospike_db.exists((settings.AEROSPIKE_NAMESPACE, old_set_name, 1))
-# 		self.assertIsNone(meta)
-# 		_, meta = aerospike_db.exists((settings.AEROSPIKE_NAMESPACE, new_set_name, 1))
-# 		self.assertIsNotNone(meta)
-#
-# 	def test_change_counter_max_value(self):
-# 		reverse_kwargs = {
-# 			'platform': self.platform.slug,
-# 			'element': self.element.slug,
-# 			'counter': self.counter.slug,
-# 		}
-# 		url = reverse('counter-detail', kwargs=reverse_kwargs)
-# 		data = {'max_value': self.counter.max_value + 1}
-# 		response = self.client.patch(url, json.dumps(data), content_type='application/json')
-# 		self.assertEqual(response.status_code, status.HTTP_200_OK)
-#
-# 	def test_change_counter_max_value_error_overflow(self):
-# 		self.test_increment_counter()
-# 		reverse_kwargs = {
-# 			'platform': self.platform.slug,
-# 			'element': self.element.slug,
-# 			'counter': self.counter.slug,
-# 		}
-# 		url = reverse('counter-detail', kwargs=reverse_kwargs)
-# 		data = {'max_value': 5}
-# 		response = self.client.patch(url, json.dumps(data), content_type='application/json')
-# 		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-#
-# 	def tearDown(self) -> None:
-# 		for set_name, key in self.added_records:
-# 			try:
-# 				aerospike_db.remove((settings.AEROSPIKE_NAMESPACE, set_name, key))
-# 			except exception.AerospikeError:
-# 				pass
+# def test_change_counter_max_value_error_overflow(self):
+# 	self.test_increment_counter()
+# 	reverse_kwargs = {
+# 		'platform': self.platform.slug,
+# 		'element': self.element.slug,
+# 		'counter': self.counter.slug,
+# 	}
+# 	url = reverse('counter-detail', kwargs=reverse_kwargs)
+# 	data = {'max_value': 5}
+# 	response = self.client.patch(url, json.dumps(data), content_type='application/json')
+# 	self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+# def tearDown(self) -> None:
+# 	for set_name, key in self.added_records:
+# 		try:
+# 			aerospike_db.remove((settings.AEROSPIKE_NAMESPACE, set_name, key))
+# 		except exception.AerospikeError:
+# 			pass
