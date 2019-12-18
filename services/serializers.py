@@ -29,7 +29,9 @@ class PlatformSerializer(serializers.HyperlinkedModelSerializer):
 		slug = slugify(value)
 		if self.instance is not None and self.instance.slug == slug:
 			return value
-		if Platform.objects.filter(name=value).exists():
+		if slug == "platforms":
+			raise ValidationError("cannot add platform with reserved name")
+		elif Platform.objects.filter(name=value).exists():
 			raise ValidationError("must be unique")
 		elif Platform.objects.filter(slug=slug).exists():
 			raise ValidationError("avoid similar names i.e (Google google, face-book Face Book)")
@@ -67,7 +69,9 @@ class ElementSerializer(serializers.ModelSerializer):
 			return value
 		platform_slug = self.context['view'].kwargs.get('platform')
 
-		if Element.objects.filter(platform__slug=platform_slug, name=value).exists():
+		if slug == "elements":
+			raise ValidationError("cannot add element with reserved name")
+		elif Element.objects.filter(platform__slug=platform_slug, name=value).exists():
 			raise ValidationError("must be unique inside each platform")
 		elif Element.objects.filter(platform__slug=platform_slug, slug=slug).exists():
 			raise ValidationError("avoid similar names i.e (Ad Groups and ad-groups)")
@@ -97,8 +101,9 @@ class CounterSerializer(serializers.ModelSerializer):
 		element_slug = self.context['view'].kwargs.get('element')
 		platform_slug = self.context['view'].kwargs.get('platform')
 		element = Element.objects.filter(platform__slug=platform_slug, slug=element_slug).first()
-
-		if Counter.objects.filter(element=element, name=value).exists():
+		if slug == "counters" or slug == "records":
+			raise ValidationError("cannot add counter with reserved name")
+		elif Counter.objects.filter(element=element, name=value).exists():
 			raise ValidationError("must be unique inside each element")
 		elif Counter.objects.filter(element=element, slug=slug).exists():
 			raise ValidationError("avoid similar names i.e (Group Counter, group-counter)")
