@@ -2,8 +2,8 @@ from django.db import models
 
 
 class Platform(models.Model):
-	name = models.CharField(max_length=20, unique=True)
-	slug = models.SlugField(max_length=20, unique=True)
+	name = models.CharField(max_length=30, unique=True)
+	slug = models.SlugField(max_length=30, unique=True)
 
 	def __str__(self):
 		return self.slug

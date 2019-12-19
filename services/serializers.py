@@ -89,9 +89,11 @@ class CounterSerializer(serializers.ModelSerializer):
 
 	def get_url(self, obj):
 		request = self.context.get('request')
-		url = reverse('counter-detail', kwargs={'platform': obj.element.platform.slug,
-												'element': obj.element.slug,
-												'counter': obj.slug})
+		element_slug = self.context['view'].kwargs.get('element')
+		platform_slug = self.context['view'].kwargs.get('platform')
+		url = reverse('counter-detail', kwargs={
+			'platform': platform_slug, 'element': element_slug, 'counter': obj.slug
+		})
 		return request.build_absolute_uri(url)
 
 	def validate_name(self, value):

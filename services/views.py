@@ -2,6 +2,7 @@ from django.conf import settings
 from django.utils.text import slugify
 from rest_framework import status
 from rest_framework.decorators import api_view
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
@@ -71,7 +72,7 @@ class ElementListCreateApiView(ListCreateAPIView):
 	def perform_create(self, serializer):
 		platform_slug = self.kwargs['platform']
 		slug = slugify(serializer.validated_data['name'])
-		platform = Platform.objects.filter(slug=platform_slug).first()
+		platform = Platform.objects.get(slug=platform_slug)
 		serializer.save(platform=platform, slug=slug)
 
 
@@ -140,16 +141,16 @@ class CounterListCreateApiView(ListCreateAPIView):
 
 	def perform_create(self, serializer):
 		slug = slugify(serializer.validated_data['name'])
-		element_slug = self.kwargs['element']
-		platform_slug = self.kwargs['platform']
-		element = Element.objects.filter(platform__slug=platform_slug,
-										 slug=element_slug).first()
+		try:
+			element = Element.objects.get(
+				platform__slug=self.kwargs['platform'], slug=self.kwargs['element'])
+		except Element.DoesNotExist:
+			raise ValidationError({"element": "does not exist"})
 		serializer.save(element=element, slug=slug)
 
-		query = aerospike_db.query(settings.AEROSPIKE_NS,
-								   f"{platform_slug}/{element_slug}")
 		callback_func = add_counter_to_record(serializer.data['id'])
-		query.foreach(callback_func)
+		set_name = f"{self.kwargs['platform']}/{self.kwargs['element']}"
+		aerospike_db.query(settings.AEROSPIKE_NS, set_name).foreach(callback_func)
 
 
 class CounterDetailApiView(RetrieveUpdateDestroyAPIView):
@@ -169,7 +170,7 @@ class CounterDetailApiView(RetrieveUpdateDestroyAPIView):
 	def perform_destroy(self, instance):
 		set_name = f"{self.kwargs['platform']}/{self.kwargs['element']}"
 		query = aerospike_db.query(settings.AEROSPIKE_NS, set_name)
-		callback_func = delete_counter(instance.id)
+		callback_func = delete_counter_from_record(instance.id)
 		query.foreach(callback_func)
 		instance.delete()
 

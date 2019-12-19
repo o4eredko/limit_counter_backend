@@ -116,12 +116,15 @@ class TestCounters(TestCase):
 	@classmethod
 	def setUpTestData(cls):
 		cls.platform = Platform.objects.create(name='Test Platform', slug='test-platform')
-		cls.element = Element.objects.create(name='Test Element', slug='test-element',
-											 platform=cls.platform)
-		cls.element2 = Element.objects.create(name='Test Element2', slug='test-element2',
-											  platform=cls.platform)
-		cls.counter = Counter.objects.create(name='Test Counter', slug='test-counter', max_value=50,
-											 element=cls.element)
+		cls.element = Element.objects.create(
+			name='Test Element', slug='test-element', platform=cls.platform
+		)
+		cls.element2 = Element.objects.create(
+			name='Test Element2', slug='test-element2', platform=cls.platform
+		)
+		cls.counter = Counter.objects.create(
+			name='Test Counter', slug='test-counter', max_value=50, element=cls.element
+		)
 		reverse_kwargs = {'platform': cls.platform.slug, 'element': cls.element.slug}
 		cls.counter_list_url = reverse('counter-list', kwargs=reverse_kwargs)
 
@@ -228,7 +231,8 @@ class TestCounterActions(TestCase):
 		cls.platform = Platform.objects.create(name=name, slug=slug)
 		cls.element = Element.objects.create(name=name, slug=slug, platform=cls.platform)
 		cls.counter = Counter.objects.create(
-			name=name, slug=slug, max_value=20, element=cls.element)
+			name=name, slug=slug, max_value=20, element=cls.element
+		)
 		cls.records_url = reverse('record-list', kwargs={'platform': slug, 'element': slug})
 
 	def setUp(self) -> None:
@@ -245,6 +249,33 @@ class TestCounterActions(TestCase):
 			'counter': self.counter.slug,
 		}
 		self.counter_actions_url = reverse('counter-actions', kwargs=self.reverse_kwargs)
+
+	def test_create_counter(self):
+		data = {'name': 'Test Counter Actions2', 'max_value': 50}
+		reverse_kwargs = {'platform': self.platform.slug, 'element': self.element.slug}
+		url = reverse('counter-list', kwargs=reverse_kwargs)
+		new_counter = self.client.post(url, data)
+		self.assertEqual(new_counter.status_code, status.HTTP_201_CREATED)
+
+		self.reverse_kwargs['counter'] = new_counter.data['slug']
+		url = reverse('counter-actions', kwargs=self.reverse_kwargs)
+		response = self.client.post(url, {'value': data['max_value']})
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.assertEqual(response.data, data['max_value'])
+
+	def test_delete_counter(self):
+		data = {'name': 'Test Counter Actions2', 'max_value': 50}
+		reverse_kwargs = {'platform': self.platform.slug, 'element': self.element.slug}
+		url = reverse('counter-list', kwargs=reverse_kwargs)
+		new_counter = self.client.post(url, data)
+		reverse_kwargs['counter'] = new_counter.data['slug']
+
+		url = reverse('counter-detail', kwargs=reverse_kwargs)
+		response = self.client.delete(url)
+		self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+		reverse_kwargs['uid'] = self.reverse_kwargs['uid']
+		response = self.client.get(reverse('counter-actions', kwargs=reverse_kwargs))
+		self.assertEqual(response.status_code, HTTP_441_NOT_EXIST)
 
 	def test_get_counter(self):
 		response = self.client.get(self.counter_actions_url)
@@ -282,6 +313,18 @@ class TestCounterActions(TestCase):
 		response = self.client.get(self.counter_actions_url)
 		self.assertEqual(response.status_code, status.HTTP_200_OK)
 		self.assertEqual(response.data, data['value'])
+
+	def test_change_counter_max_value_error_overflow(self):
+		self.test_increment_counter()
+		reverse_kwargs = {
+			'platform': self.platform.slug,
+			'element': self.element.slug,
+			'counter': self.counter.slug,
+		}
+		url = reverse('counter-detail', kwargs=reverse_kwargs)
+		data = {'max_value': 5}
+		response = self.client.patch(url, json.dumps(data), content_type='application/json')
+		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 	def tearDown(self) -> None:
 		for set_name, key in self.added_records:
