@@ -116,7 +116,7 @@ class CounterSerializer(serializers.ModelSerializer):
 		platform_slug = self.context['view'].kwargs.get('platform')
 		set_name = f"{platform_slug}/{element_slug}"
 
-		query = aerospike_db.query(settings.AEROSPIKE_NAMESPACE, set_name)
+		query = aerospike_db.query(settings.AEROSPIKE_NS, set_name)
 		callback_func = check_counter_overflow(self.instance.id, value)
 		query.foreach(callback_func)
 		if callback_func(get_overflow=True):

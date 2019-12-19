@@ -40,17 +40,25 @@ class PlatformDetailApiView(RetrieveUpdateDestroyAPIView):
 
 	def perform_update(self, serializer):
 		obj = self.get_object()
-		slug = slugify(serializer.validated_data.get('name', obj.slug))
-		serializer.save(slug=slug)
-		query = aerospike_db.query(settings.AEROSPIKE_NAMESPACE)
-		callback_func = update_set_name(obj.slug, slug)
-		query.foreach(callback_func)
+		name = serializer.validated_data.get('name', obj.name)
+		new_slug = slugify(name)
+		if new_slug != obj.slug:
+			elements = Element.objects.filter(platform=obj)
+			for element in elements:
+				old_set_name = f"{obj.slug}/{element.slug}"
+				new_set_name = f"{new_slug}/{element.slug}"
+				callback_func = update_set_name(new_set_name)
+				aerospike_db.query(settings.AEROSPIKE_NS, old_set_name).foreach(callback_func)
+				aerospike_db.truncate(settings.AEROSPIKE_NS, old_set_name, 0)
+
+		if serializer.validated_data.get('name') != obj.name:
+			serializer.save(slug=new_slug)
 
 	def perform_destroy(self, instance):
 		elements = Element.objects.filter(platform=instance)
 		for element in elements:
 			set_name = f"{instance.slug}/{element.slug}"
-			aerospike_db.truncate(settings.AEROSPIKE_NAMESPACE, set_name, 0)
+			aerospike_db.truncate(settings.AEROSPIKE_NS, set_name, 0)
 		instance.delete()
 
 
@@ -77,22 +85,28 @@ class ElementDetailApiView(RetrieveUpdateDestroyAPIView):
 
 	def perform_update(self, serializer):
 		obj = self.get_object()
-		slug = slugify(serializer.validated_data.get('name', obj.slug))
-		serializer.save(slug=slug)
-		query = aerospike_db.query(settings.AEROSPIKE_NAMESPACE)
-		callback_func = update_set_name(obj.slug, slug)
-		query.foreach(callback_func)
+		name = serializer.validated_data.get('name', obj.name)
+		new_slug = slugify(name)
+		if new_slug != obj.slug:
+			old_set_name = f"{self.kwargs['platform']}/{obj.slug}"
+			new_set_name = f"{self.kwargs['platform']}/{new_slug}"
+			callback_func = update_set_name(new_set_name)
+			aerospike_db.query(settings.AEROSPIKE_NS, old_set_name).foreach(callback_func)
+			aerospike_db.truncate(settings.AEROSPIKE_NS, old_set_name, 0)
+
+		if serializer.validated_data.get('name') != obj.name:
+			serializer.save(slug=new_slug)
 
 	def perform_destroy(self, instance):
 		set_name = f"{instance.platform.slug}/{instance.slug}"
-		aerospike_db.truncate(settings.AEROSPIKE_NAMESPACE, set_name, 0)
+		aerospike_db.truncate(settings.AEROSPIKE_NS, set_name, 0)
 		instance.delete()
 
 
 class RecordListCreateApiView(APIView):
 	def get(self, request, **kwargs):
 		set_name = f"{kwargs['platform']}/{kwargs['element']}"
-		results = aerospike_db.scan(settings.AEROSPIKE_NAMESPACE, set_name).results()
+		results = aerospike_db.scan(settings.AEROSPIKE_NS, set_name).results()
 		return Response(convert_results(results), status=status.HTTP_200_OK)
 
 	def post(self, request, **kwargs):
@@ -101,7 +115,7 @@ class RecordListCreateApiView(APIView):
 		except (KeyError, ValueError):
 			return Response({'value': 'must be an integer'}, status=status.HTTP_400_BAD_REQUEST)
 
-		key = (settings.AEROSPIKE_NAMESPACE, f"{kwargs['platform']}/{kwargs['element']}", record_id)
+		key = (settings.AEROSPIKE_NS, f"{kwargs['platform']}/{kwargs['element']}", record_id)
 		_, meta = aerospike_db.exists(key)
 		if meta is not None:
 			message = {'value': 'record with this value already exists'}
@@ -120,8 +134,9 @@ class CounterListCreateApiView(ListCreateAPIView):
 	serializer_class = CounterSerializer
 
 	def get_queryset(self):
-		return Counter.objects.filter(element__platform__slug=self.kwargs['platform'],
-									  element__slug=self.kwargs['element'])
+		return Counter.objects.filter(
+			element__platform__slug=self.kwargs['platform'], element__slug=self.kwargs['element']
+		)
 
 	def perform_create(self, serializer):
 		slug = slugify(serializer.validated_data['name'])
@@ -131,7 +146,7 @@ class CounterListCreateApiView(ListCreateAPIView):
 										 slug=element_slug).first()
 		serializer.save(element=element, slug=slug)
 
-		query = aerospike_db.query(settings.AEROSPIKE_NAMESPACE,
+		query = aerospike_db.query(settings.AEROSPIKE_NS,
 								   f"{platform_slug}/{element_slug}")
 		callback_func = add_counter_to_record(serializer.data['id'])
 		query.foreach(callback_func)
@@ -153,7 +168,7 @@ class CounterDetailApiView(RetrieveUpdateDestroyAPIView):
 
 	def perform_destroy(self, instance):
 		set_name = f"{self.kwargs['platform']}/{self.kwargs['element']}"
-		query = aerospike_db.query(settings.AEROSPIKE_NAMESPACE, set_name)
+		query = aerospike_db.query(settings.AEROSPIKE_NS, set_name)
 		callback_func = delete_counter(instance.id)
 		query.foreach(callback_func)
 		instance.delete()
@@ -162,7 +177,7 @@ class CounterDetailApiView(RetrieveUpdateDestroyAPIView):
 class CounterActionsApiView(APIView):
 	def get_record_key(self):
 		set_name = f"{self.kwargs['platform']}/{self.kwargs['element']}"
-		return settings.AEROSPIKE_NAMESPACE, set_name, self.kwargs['uid']
+		return settings.AEROSPIKE_NS, set_name, self.kwargs['uid']
 
 	def get_counter_with_value(self, key):
 		counter = Counter.objects.get(

@@ -4,19 +4,11 @@ from services import aerospike_db
 from services.models import Counter
 
 
-def update_set_name(old_name_part, new_name_part):
+def update_set_name(new_set):
 	def wrapper(record):
 		key, _, bins = record
-		namespace, set_name, *_ = key
-		name_parts = set_name.split('/')
-		try:
-			index = name_parts.index(old_name_part)
-		except ValueError:
-			return
-		else:
-			name_parts[index] = new_name_part
-			aerospike_db.put((namespace, '/'.join(name_parts), bins['key']), bins)
-			aerospike_db.remove(key)
+		namespace, set_name, record_id, _ = key
+		aerospike_db.put((namespace, new_set, record_id), bins)
 
 	return wrapper
 

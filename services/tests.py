@@ -179,7 +179,7 @@ class TestCounters(TestCase):
 		self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
 
-@override_settings(AEROSPIKE_NAMESPACE='test')
+@override_settings(AEROSPIKE_NS='test')
 class TestRecords(TestCase):
 	@classmethod
 	def setUpTestData(cls):
@@ -214,12 +214,12 @@ class TestRecords(TestCase):
 	def tearDown(self) -> None:
 		for set_name, key in self.added_records:
 			try:
-				aerospike_db.remove((settings.AEROSPIKE_NAMESPACE, set_name, key))
+				aerospike_db.remove((settings.AEROSPIKE_NS, set_name, key))
 			except exception.AerospikeError:
 				pass
 
 
-@override_settings(AEROSPIKE_NAMESPACE='test')
+@override_settings(AEROSPIKE_NS='test')
 class TestCounterActions(TestCase):
 	@classmethod
 	def setUpTestData(cls):
@@ -286,36 +286,23 @@ class TestCounterActions(TestCase):
 	def tearDown(self) -> None:
 		for set_name, key in self.added_records:
 			try:
-				aerospike_db.remove((settings.AEROSPIKE_NAMESPACE, set_name, key))
+				aerospike_db.remove((settings.AEROSPIKE_NS, set_name, key))
 			except exception.AerospikeError:
 				pass
 
 
+@override_settings(AEROSPIKE_NS='test')
 class TestAerospikeChangeSet(TestCase):
-	# 	@classmethod
-	# 	def setUpTestData(cls):
-	# 		pass
-
-	# cls.platform = Platform.objects.create(name='Test Platform', slug='test-platform')
-	# cls.element = Element.objects.create(
-	# 	name='Test Element', slug='test-element', platform=cls.platform)
-	# cls.counter = Counter.objects.create(
-	# 	name='Test Counter', slug='test-counter', max_value=20, element=cls.element)
-	# reverse_kwargs = {'platform': cls.platform.slug, 'element': cls.element.slug}
-	# cls.records_url = reverse('record-list', kwargs=reverse_kwargs)
-
 	def setUp(self) -> None:
 		self.added_records = []
 
-		name = 'For Delete'
-		slug = 'for-delete'
+		name = 'Test Change Set'
+		slug = 'test-change-set'
 		self.platform = Platform.objects.create(name=name, slug=slug)
 		self.element = Element.objects.create(name=name, slug=slug, platform=self.platform)
 		self.element2 = Element.objects.create(
-			name='For Delete2', slug='for-delete-2', platform=self.platform
+			name='Test Change Set2', slug='test-change-set-2', platform=self.platform
 		)
-		Counter.objects.create(name=name, slug=slug, max_value=20, element=self.element)
-		Counter.objects.create(name=name, slug=slug, max_value=20, element=self.element2)
 
 		reverse_kwargs = {'platform': self.platform.slug, 'element': self.element.slug}
 		self.client.post(reverse('record-list', kwargs=reverse_kwargs), {'value': 42})
@@ -323,80 +310,97 @@ class TestAerospikeChangeSet(TestCase):
 
 		reverse_kwargs['element'] = self.element2.slug
 		self.client.post(reverse('record-list', kwargs=reverse_kwargs), {'value': 42})
-		self.added_records.append((f"{self.platform.slug}/{self.element.slug}", 42))
+		self.added_records.append((f"{self.platform.slug}/{self.element2.slug}", 42))
 
-	# data = {'value': 3}
-	# response = self.client.post(self.records_url, data)
-	# self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-	# self.added_records.append((f"{self.platform.slug}/{self.element.slug}", data['value']))
-
-	# self.reverse_kwargs = {
-	# 	'platform': self.platform.slug,
-	# 	'element': self.element.slug,
-	# 	'uid': data['value'],
-	# 	'counter': self.counter.slug,
-	# }
-	# self.counter_actions_url = reverse('counter-actions', kwargs=self.reverse_kwargs)
-
-	def test_delete_platform(self):
-		url = reverse('platform-detail', kwargs={'platform': self.platform.slug})
+	def delete_structure(self, url):
 		response = self.client.delete(url)
 		self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
-		results = aerospike_db.scan(settings.AEROSPIKE_NAMESPACE, self.element.slug).results()
-		self.assertEqual(len(results), 0)
-		results = aerospike_db.scan(settings.AEROSPIKE_NAMESPACE, self.element2.slug).results()
+	def test_delete_platform(self):
+		url = reverse('platform-detail', kwargs={'platform': self.platform.slug})
+		self.delete_structure(url)
+
+		set_name = f"{self.platform.slug}/{self.element.slug}"
+		results = aerospike_db.scan(settings.AEROSPIKE_NS, set_name).results()
 		self.assertEqual(len(results), 0)
 
-	# def test_change_set_name(self):
-	# 	platform = Platform.objects.create(name='Platform To Update', slug='platform-to-update')
-	# 	element = Element.objects.create(
-	# 		name='Test Element', slug='test-element', platform=platform)
-	#
-	# 	url = reverse('record-list', kwargs={'platform': platform.slug, 'element': element.slug})
-	# 	response = self.client.post(url, {'value': 1})
-	# 	self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-	# 	old_set_name = f"{platform.slug}/{element.slug}"
-	# 	self.added_records.append((old_set_name, 1))
-	#
-	# 	data = {'name': 'Platform Was Updated'}
-	# 	url = reverse('platform-detail', kwargs={'platform': platform.slug})
-	# 	response = self.client.patch(url, json.dumps(data), content_type='application/json')
-	# 	new_set_name = f"{response.data['slug']}/{element.slug}"
-	# 	self.assertEqual(response.status_code, status.HTTP_200_OK)
-	# 	self.added_records.append((new_set_name, 1))
-	#
-	# 	_, meta = aerospike_db.exists((settings.AEROSPIKE_NAMESPACE, old_set_name, 1))
-	# 	self.assertIsNone(meta)
-	# 	_, meta = aerospike_db.exists((settings.AEROSPIKE_NAMESPACE, new_set_name, 1))
-	# 	self.assertIsNotNone(meta)
+		set_name = f"{self.platform.slug}/{self.element2.slug}"
+		results = aerospike_db.scan(settings.AEROSPIKE_NS, set_name).results()
+		self.assertEqual(len(results), 0)
 
-	# def test_change_counter_max_value(self):
-	# 	reverse_kwargs = {
-	# 		'platform': self.platform.slug,
-	# 		'element': self.element.slug,
-	# 		'counter': self.counter.slug,
-	# 	}
-	# 	url = reverse('counter-detail', kwargs=reverse_kwargs)
-	# 	data = {'max_value': self.counter.max_value + 1}
-	# 	response = self.client.patch(url, json.dumps(data), content_type='application/json')
-	# 	self.assertEqual(response.status_code, status.HTTP_200_OK)
-	#
-	# def test_change_counter_max_value_error_overflow(self):
-	# 	self.test_increment_counter()
-	# 	reverse_kwargs = {
-	# 		'platform': self.platform.slug,
-	# 		'element': self.element.slug,
-	# 		'counter': self.counter.slug,
-	# 	}
-	# 	url = reverse('counter-detail', kwargs=reverse_kwargs)
-	# 	data = {'max_value': 5}
-	# 	response = self.client.patch(url, json.dumps(data), content_type='application/json')
-	# 	self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+	def test_delete_element(self):
+		url = reverse('element-detail', kwargs={
+			'platform': self.platform.slug, 'element': self.element.slug
+		})
+		self.delete_structure(url)
+
+		set_name = f"{self.platform.slug}/{self.element.slug}"
+		results = aerospike_db.scan(settings.AEROSPIKE_NS, set_name).results()
+		self.assertEqual(len(results), 0)
+
+		set_name = f"{self.platform.slug}/{self.element2.slug}"
+		results = aerospike_db.scan(settings.AEROSPIKE_NS, set_name).results()
+		self.assertNotEqual(len(results), 0)
+
+	def update_structure(self, url):
+		data = {'name': 'Updated Name'}
+		response = self.client.patch(url, json.dumps(data), content_type='application/json')
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.assertEqual(response.data['name'], data['name'])
+		return response
+
+	def test_change_platform_name(self):
+		# records in platform before update
+		platform_records = []
+		elements = Element.objects.filter(platform=self.platform)
+		for element in elements:
+			set_name = f"{self.platform.slug}/{element.slug}"
+			records = aerospike_db.scan(settings.AEROSPIKE_NS, set_name).results()
+			platform_records.append(records)
+
+		url = reverse('platform-detail', kwargs={'platform': self.platform.slug})
+		response = self.update_structure(url)
+
+		for i, element in enumerate(elements):
+			set_name = f"{self.platform.slug}/{element.slug}"
+			records = aerospike_db.scan(settings.AEROSPIKE_NS, set_name).results()
+			self.assertEqual(len(records), 0)
+
+		# compare records in updated platform with old ones
+		for i, element in enumerate(elements):
+			set_name = f"{response.data['slug']}/{element.slug}"
+			records = aerospike_db.scan(settings.AEROSPIKE_NS, set_name).results()
+			self.assertEqual(len(records), len(platform_records[i]))
+			self.added_records.append((set_name, 42))
+
+	def test_change_element_name(self):
+		# records in element before update
+		set_name = f"{self.platform.slug}/{self.element.slug}"
+		element_records = aerospike_db.scan(settings.AEROSPIKE_NS, set_name).results()
+
+		url = reverse('element-detail', kwargs={
+			'platform': self.platform.slug, 'element': self.element.slug
+		})
+		response = self.update_structure(url)
+
+		set_name = f"{self.platform.slug}/{self.element.slug}"
+		records = aerospike_db.scan(settings.AEROSPIKE_NS, set_name).results()
+		self.assertEqual(len(records), 0)
+
+		# change does not affect another element inside the same platform
+		set_name = f"{self.platform.slug}/{self.element2.slug}"
+		records = aerospike_db.scan(settings.AEROSPIKE_NS, set_name).results()
+		self.assertNotEqual(len(records), 0)
+
+		# compare records in updated element with old ones
+		set_name = f"{self.platform.slug}/{response.data['slug']}"
+		records = aerospike_db.scan(settings.AEROSPIKE_NS, set_name).results()
+		self.assertEqual(len(records), len(element_records))
+		self.added_records.append((set_name, 42))
 
 	def tearDown(self) -> None:
 		for set_name, key in self.added_records:
 			try:
-				aerospike_db.remove((settings.AEROSPIKE_NAMESPACE, set_name, key))
+				aerospike_db.remove((settings.AEROSPIKE_NS, set_name, key))
 			except exception.AerospikeError:
 				pass

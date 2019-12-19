@@ -118,6 +118,6 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
-AEROSPIKE_NAMESPACE = 'limit_counter'
+AEROSPIKE_NS = 'limit_counter'
 
 CORS_ORIGIN_ALLOW_ALL = True
