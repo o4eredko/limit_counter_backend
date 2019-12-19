@@ -70,9 +70,11 @@ class ElementListCreateApiView(ListCreateAPIView):
 		return Element.objects.filter(platform__slug=self.kwargs['platform'])
 
 	def perform_create(self, serializer):
-		platform_slug = self.kwargs['platform']
 		slug = slugify(serializer.validated_data['name'])
-		platform = Platform.objects.get(slug=platform_slug)
+		try:
+			platform = Platform.objects.get(slug=self.kwargs['platform'])
+		except Platform.DoesNotExist:
+			raise ValidationError({"platform": "Does not exist"})
 		serializer.save(platform=platform, slug=slug)
 
 
@@ -145,7 +147,7 @@ class CounterListCreateApiView(ListCreateAPIView):
 			element = Element.objects.get(
 				platform__slug=self.kwargs['platform'], slug=self.kwargs['element'])
 		except Element.DoesNotExist:
-			raise ValidationError({"element": "does not exist"})
+			raise ValidationError({"element": "Does not exist"})
 		serializer.save(element=element, slug=slug)
 
 		callback_func = add_counter_to_record(serializer.data['id'])
