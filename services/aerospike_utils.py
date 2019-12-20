@@ -44,7 +44,7 @@ def check_counter_overflow(counter_id=None, new_max_value=None):
 
 
 def convert_results(results):
-	for (_, _, bins) in results:
+	for (key, _, bins) in results:
 		record = collections.OrderedDict(id=bins['id'])
 		for (counter_id, counter_value) in bins.items():
 			if counter_id == 'id':

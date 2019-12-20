@@ -22,9 +22,9 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECRET_KEY = '*(u@ksk337t(qngg@^l)#k47!c_ia=l6_@3u9cay-s)2s$=de='
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['127.0.0.1']
 
 # Application definition
 
@@ -119,5 +119,44 @@ USE_TZ = True
 STATIC_URL = '/static/'
 
 AEROSPIKE_NS = 'limit_counter'
-
 CORS_ORIGIN_ALLOW_ALL = True
+
+
+def skip_get_requests(record):
+	if record.args[0].startswith('GET'):
+		return False
+	return True
+
+
+LOGGING = {
+	'version': 1,
+	'disable_existing_loggers': False,
+	'formatters': {
+		'django.server': {
+			'()': 'django.utils.log.ServerFormatter',
+			'format': '[{server_time}] {levelname} {message}',
+			'style': '{',
+		}
+	},
+	'filters': {
+		'skip_get_requests': {
+			'()': 'django.utils.log.CallbackFilter',
+			'callback': skip_get_requests
+		},
+	},
+	'handlers': {
+		'django.server': {
+			'level': 'INFO',
+			'class': 'logging.StreamHandler',
+			'formatter': 'django.server',
+			'filters': ['skip_get_requests'],
+		},
+	},
+	'loggers': {
+		'django.server': {
+			'handlers': ['django.server'],
+			'level': 'INFO',
+			'propagate': False,
+		},
+	}
+}

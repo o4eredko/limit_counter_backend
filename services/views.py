@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 from django.utils.text import slugify
 from rest_framework import status
@@ -17,6 +19,8 @@ HTTP_440_FULL = 440
 HTTP_441_NOT_EXIST = 441
 HTTP_442_ALREADY_EXIST = 442
 
+logger = logging.getLogger('django')
+
 
 @api_view(['GET'])
 def api_root(request, format=None):
@@ -31,6 +35,7 @@ class PlatformListCreateApiView(ListCreateAPIView):
 
 	def perform_create(self, serializer):
 		serializer.save(slug=slugify(serializer.validated_data['name']))
+		# logging.info("{} was created".format(serializer.data))
 
 
 class PlatformDetailApiView(RetrieveUpdateDestroyAPIView):
@@ -110,7 +115,8 @@ class RecordListCreateApiView(APIView):
 	def get(self, request, **kwargs):
 		set_name = f"{kwargs['platform']}/{kwargs['element']}"
 		results = aerospike_db.scan(settings.AEROSPIKE_NS, set_name).results()
-		return Response(convert_results(results), status=status.HTTP_200_OK)
+		results = sorted(convert_results(results), key=lambda e: e['id'])
+		return Response(results, status=status.HTTP_200_OK)
 
 	def post(self, request, **kwargs):
 		try:
