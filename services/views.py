@@ -35,7 +35,6 @@ class PlatformListCreateApiView(ListCreateAPIView):
 
 	def perform_create(self, serializer):
 		serializer.save(slug=slugify(serializer.validated_data['name']))
-		# logging.info("{} was created".format(serializer.data))
 
 
 class PlatformDetailApiView(RetrieveUpdateDestroyAPIView):
