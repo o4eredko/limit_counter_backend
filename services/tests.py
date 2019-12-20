@@ -117,14 +117,11 @@ class TestCounters(TestCase):
 	def setUpTestData(cls):
 		cls.platform = Platform.objects.create(name='Test Platform', slug='test-platform')
 		cls.element = Element.objects.create(
-			name='Test Element', slug='test-element', platform=cls.platform
-		)
+			name='Test Element', slug='test-element', platform=cls.platform)
 		cls.element2 = Element.objects.create(
-			name='Test Element2', slug='test-element2', platform=cls.platform
-		)
+			name='Test Element2', slug='test-element2', platform=cls.platform)
 		cls.counter = Counter.objects.create(
-			name='Test Counter', slug='test-counter', max_value=50, element=cls.element
-		)
+			name='Test Counter', slug='test-counter', max_value=50, element=cls.element)
 		reverse_kwargs = {'platform': cls.platform.slug, 'element': cls.element.slug}
 		cls.counter_list_url = reverse('counter-list', kwargs=reverse_kwargs)
 
@@ -149,6 +146,10 @@ class TestCounters(TestCase):
 		response = self.client.post(self.counter_list_url, data)
 		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+		data = {'name': 'Records'}
+		response = self.client.post(self.counter_list_url, data)
+		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
 	def test_create_error_name_exists(self):
 		data = {'name': self.counter.name, 'max_value': 50}
 		response = self.client.post(self.counter_list_url, data)
@@ -160,8 +161,8 @@ class TestCounters(TestCase):
 		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 	def test_update_name(self):
-		counter = Counter.objects.create(name='Counter', slug='counter',
-										 max_value=50, element=self.element)
+		counter = Counter.objects.create(
+			name='Counter', slug='counter', max_value=50, element=self.element)
 		reverse_kwargs = {
 			'platform': self.platform.slug, 'element': self.element.slug, 'counter': counter.slug
 		}
@@ -172,8 +173,8 @@ class TestCounters(TestCase):
 		self.assertEqual(response.data['name'], data['name'])
 
 	def test_delete(self):
-		counter = Counter.objects.create(name='Counter', slug='counter',
-										 max_value=5, element=self.element)
+		counter = Counter.objects.create(
+			name='Counter', slug='counter', max_value=5, element=self.element)
 		reverse_kwargs = {
 			'platform': self.platform.slug, 'element': self.element.slug, 'counter': counter.slug
 		}
