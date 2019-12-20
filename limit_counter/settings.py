@@ -22,9 +22,9 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECRET_KEY = '*(u@ksk337t(qngg@^l)#k47!c_ia=l6_@3u9cay-s)2s$=de='
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = ['127.0.0.1']
+ALLOWED_HOSTS = ['react-app', '127.0.0.1']
 
 # Application definition
 
@@ -123,7 +123,7 @@ CORS_ORIGIN_ALLOW_ALL = True
 
 
 def skip_get_requests(record):
-	if record.args[0].startswith('GET'):
+	if record.args[0].startswith('GET') or record.args[0].startswith('OPTIONS'):
 		return False
 	return True
 
