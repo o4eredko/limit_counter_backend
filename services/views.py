@@ -132,8 +132,10 @@ class RecordListCreateApiView(APIView):
 		counters = Counter.objects.filter(
 			element__platform__slug=kwargs['platform'], element__slug=kwargs['element'])
 		bins = {str(counter.id): 0 for counter in counters}
-		response = {counter.slug: f"0/{counter.max_value}" for counter in counters}
-		response['id'] = bins['id'] = record_id
+		bins['id'] = record_id
+		response = collections.OrderedDict(id=record_id)
+		for counter in counters:
+			response[counter.slug] = f"0/{counter.max_value}"
 		aerospike_db.put(key, bins)
 		return Response(response, status=status.HTTP_201_CREATED)
 
