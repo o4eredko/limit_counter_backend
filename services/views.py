@@ -122,6 +122,11 @@ class RecordListCreateApiView(APIView):
 			record_id = int(request.data['value'])
 		except (KeyError, ValueError):
 			return Response({'value': 'must be an integer'}, status=status.HTTP_400_BAD_REQUEST)
+		try:
+			element = Element.objects.get(
+				platform__slug=self.kwargs['platform'], slug=self.kwargs['element'])
+		except Element.DoesNotExist:
+			return Response({"element": "Does not exist"}, status=status.HTTP_400_BAD_REQUEST)
 
 		key = (settings.AEROSPIKE_NS, f"{kwargs['platform']}/{kwargs['element']}", record_id)
 		_, meta = aerospike_db.exists(key)
