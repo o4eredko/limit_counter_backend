@@ -134,8 +134,7 @@ class RecordListCreateApiView(APIView):
 			message = {'value': 'record with this value already exists'}
 			return Response(message, status=HTTP_442_ALREADY_EXIST)
 
-		counters = Counter.objects.filter(
-			element__platform__slug=kwargs['platform'], element__slug=kwargs['element'])
+		counters = Counter.objects.filter(element=element)
 		bins = {str(counter.id): 0 for counter in counters}
 		bins['id'] = record_id
 		response = collections.OrderedDict(id=record_id)
